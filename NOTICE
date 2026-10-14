@@ -1,0 +1,4 @@
+Original product implementation; no prior-art source code has been copied.
+MCP Python SDK is an external MIT dependency. Google RE2 is an external
+dependency with BSD-style licensing; retain its installed distribution notices.
+The lockfile identifies dependency distributions, not vendored application modules.

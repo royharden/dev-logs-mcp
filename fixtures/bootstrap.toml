@@ -1,0 +1,8 @@
+# Configuration-shape example only. These log paths need not exist for check-config.
+allowed_roots = ["./synthetic-logs"]
+
+[[sources]]
+id = "web"
+path = "./synthetic-logs/web.log"
+format = "plain_iso"
+timezone = "UTC"
