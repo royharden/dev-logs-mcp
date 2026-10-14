@@ -71,3 +71,27 @@ def test_range_rejects_boolean_and_excessive_lines_and_handles_eof():
         with pytest.raises(ReadFailure):
             window.lines(start, end, redactor)
     assert window.lines(2, 3, redactor) == []
+
+
+def test_window_memo_reuses_complete_rows_without_cross_pipeline_state(monkeypatch):
+    handle, index, redactor, _ = make_index(b"normal\ntrace\n")
+    window = VerifiedWindow(handle, index, ReadBudget())
+    initial = window.lines(1, 2, redactor)
+    calls = handle.calls
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("redacted row should be memoized")
+
+    monkeypatch.setattr(redactor, "redact", forbidden)
+    assert window.lines(2, 2, redactor) == initial[1:]
+    assert handle.calls == calls
+    with pytest.raises(ReadFailure):
+        window.lines(2, 2, redactor, format="plain")
+
+
+def test_window_memo_has_fixed_row_and_byte_bounds():
+    handle, index, redactor, _ = make_index(b"normal\n" * 600)
+    window = VerifiedWindow(handle, index, ReadBudget())
+    window.lines(1, 500, redactor)
+    window.lines(501, 600, redactor)
+    assert len(window._memo) <= 512 and window._memo_bytes <= 2 * 1024 * 1024

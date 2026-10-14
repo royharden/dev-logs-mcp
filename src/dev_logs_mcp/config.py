@@ -7,6 +7,19 @@ from pydantic import Field, model_validator
 
 from dev_logs_mcp.contracts import MAX_SOURCES, BoundaryModel, SourceId
 from dev_logs_mcp.parse import source_timezone
+from dev_logs_mcp.shared.mcpkit.errors import MAX_CUSTOM_RULES, MAX_PATTERN_BYTES
+from dev_logs_mcp.shared.mcpkit.redact import CustomRule, Redactor
+
+
+class DetectorConfig(BoundaryModel):
+    type_name: str = Field(min_length=1, max_length=32, pattern=r"^[A-Z][A-Z0-9_]{0,31}$")
+    pattern: str = Field(min_length=1, max_length=MAX_PATTERN_BYTES, repr=False)
+
+    @model_validator(mode="after")
+    def bounded_utf8_pattern(self):
+        if len(self.pattern.encode("utf-8")) > MAX_PATTERN_BYTES:
+            raise ValueError("configured detector exceeds UTF8 ceiling")
+        return self
 
 
 class SourceConfig(BoundaryModel):
@@ -39,6 +52,7 @@ class AppConfig(BoundaryModel):
     schema_version: int = Field(default=1, ge=1, le=1)
     allowed_roots: list[str] = Field(min_length=1, max_length=MAX_SOURCES)
     sources: list[SourceConfig] = Field(min_length=1, max_length=MAX_SOURCES)
+    redaction_rules: list[DetectorConfig] = Field(default_factory=list, max_length=MAX_CUSTOM_RULES)
 
     @model_validator(mode="after")
     def unique_source_ids(self):
@@ -46,6 +60,12 @@ class AppConfig(BoundaryModel):
             raise ValueError("duplicate source ids")
         if any(not root or "\x00" in root for root in self.allowed_roots):
             raise ValueError("empty or NUL root")
+        if self.redaction_rules:
+            Redactor(
+                custom_rules=tuple(
+                    CustomRule(rule.type_name, rule.pattern) for rule in self.redaction_rules
+                )
+            )
         return self
 
 

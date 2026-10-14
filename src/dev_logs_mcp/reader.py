@@ -28,6 +28,9 @@ class VerifiedWindow:
         index.assert_current(handle)
         self.handle, self.index, self.budget = handle, index, budget
         self._chunks: dict[int, bytes] = {}
+        self._memo: dict[int, tuple[EvidenceLine, ParseState, RedactionState]] = {}
+        self._memo_bytes = 0
+        self._pipeline = None
 
     def __repr__(self) -> str:
         return "VerifiedWindow(<bounded generation guard>)"
@@ -96,11 +99,24 @@ class VerifiedWindow:
         end = min(end, self.index.total_lines)
         if start > end:
             return []
+        binding = (redactor, format, timezone)
+        if self._pipeline is None:
+            self._pipeline = binding
+        elif self._pipeline != binding:
+            raise ReadFailure("INVALID_ARGUMENT")
+        self.index.assert_current(self.handle)
         point = self.index.checkpoint(start)
         parse_state = point.parse
         redact_state = RedactionState(point.pem_active)
         result = []
         for number in range(point.line_no, end + 1):
+            self.budget.check()
+            memo = self._memo.get(number)
+            if memo is not None:
+                row, parse_state, redact_state = memo
+                if number >= start:
+                    result.append(row)
+                continue
             raw = self.physical(number)
             inherited_time = inherited_level = False
             if raw is None:
@@ -114,18 +130,28 @@ class VerifiedWindow:
                 redacted = redactor.redact(parsed.text, redact_state)
             redact_state = redacted.state
             self.budget.check()  # A deadline cannot publish a half-redacted line.
+            line = LogLine(
+                line_no=number,
+                byte_offset=self.index.offsets[number - 1],
+                timestamp=parse_state.timestamp,
+                level=parse_state.level,
+                timestamp_inherited=inherited_time,
+                level_inherited=inherited_level,
+                text=redacted.text.value,
+                omitted=redacted.omitted,
+            )
+            row = EvidenceLine(line, redacted.text)
+            size = len(row.line.text.encode("utf-8"))
+            while self._memo and (
+                len(self._memo) >= 512 or self._memo_bytes + size > 2 * 1024 * 1024
+            ):
+                old = self._memo.pop(next(iter(self._memo)))
+                self._memo_bytes -= len(old[0].line.text.encode("utf-8"))
+            if size <= 2 * 1024 * 1024:
+                self._memo[number] = (row, parse_state, redact_state)
+                self._memo_bytes += size
             if number >= start:
-                line = LogLine(
-                    line_no=number,
-                    byte_offset=self.index.offsets[number - 1],
-                    timestamp=parse_state.timestamp,
-                    level=parse_state.level,
-                    timestamp_inherited=inherited_time,
-                    level_inherited=inherited_level,
-                    text=redacted.text.value,
-                    omitted=redacted.omitted,
-                )
-                result.append(EvidenceLine(line, redacted.text))
+                result.append(row)
         self.index.assert_current(self.handle)
         return result
 

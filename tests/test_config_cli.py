@@ -91,3 +91,25 @@ def test_directory_shape_is_one_explicit_configured_source_not_discovery():
         }
     )
     assert config.sources[0].kind == "directory"
+
+
+@pytest.mark.parametrize(
+    "rules",
+    [
+        [{"type_name": "API_KEY", "pattern": "x"}],
+        [{"type_name": "CUSTOM", "pattern": "(?=sentinel)"}],
+        [{"type_name": "CUSTOM", "pattern": "é" * 257}],
+        [{"type_name": "CUSTOM", "pattern": "x"}] * 2,
+        [{"type_name": "CUSTOM", "pattern": "x"}] * 33,
+        [{"type_name": "lowercase", "pattern": "x"}],
+    ],
+)
+def test_configured_detectors_cannot_override_defaults_or_raise_regex_bounds(rules):
+    with pytest.raises(ValueError):
+        AppConfig.model_validate(
+            {
+                "allowed_roots": ["logs"],
+                "sources": [{"id": "web", "path": "logs/a.log"}],
+                "redaction_rules": rules,
+            }
+        )
