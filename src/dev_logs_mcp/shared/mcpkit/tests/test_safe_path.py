@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -367,3 +368,436 @@ def test_posix_real_path_swap(configured, tmp_path):
         source.write_bytes(b"replacement\n")
         with pytest.raises(safe.PathPolicyError):
             handle.read(1)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+def test_windows_metadata_chain_native(configured, record_property):
+    """Actual native ancestor containment must inspect metadata without exposing a data-read API."""
+    _, source = configured
+    assert "onedrive" not in str(source).lower()
+    budget = safe._MetadataBudget()
+    native = safe._NativeWindows(budget)
+    with safe._WindowsMetadataProof(source, source.parent, _native=native) as proof:
+        assert proof.metadata().file_id > 0
+        assert not hasattr(proof, "read") and not hasattr(proof, "fileno")
+        assert str(source) not in repr(proof)
+    assert native.open_count == native.close_count
+    record_property("native_metadata_calls", budget.calls)
+    record_property("native_handle_cleanup", "complete")
+    assert budget.calls <= 4096
+    assert safe.capabilities()["windows_metadata_chain_observed"]
+    assert safe.capabilities()["windows_capability_status"]["data_authorization"] == "unimplemented"
+    assert not safe.capabilities()["data_access_available"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+def test_windows_metadata_readattributes_only_spy(configured, monkeypatch, record_property):
+    """Actual native opens must request only READ_ATTRIBUTES and bind no source-data API."""
+    _, source = configured
+    native = safe._NativeWindows(safe._MetadataBudget())
+    original = native.create
+    opens = []
+
+    def spy(path, access, sharing, security, disposition, flags, template):
+        opens.append((access, sharing, disposition, flags))
+        return original(path, access, sharing, security, disposition, flags, template)
+
+    monkeypatch.setattr(native, "create", spy)
+    with safe._WindowsMetadataProof(source, source.parent, _native=native):
+        pass
+    assert opens and all(row == (0x80, 3, 3, 0x02300000) for row in opens)
+    assert not hasattr(native, "ReadFile") and not hasattr(native, "read")
+    assert native.open_count == native.close_count
+    record_property("native_open_count", len(opens))
+    record_property("source_data_access_requested", "false")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+def test_windows_deep_unicode_chain_native(tmp_path):
+    """A real multi-component Unicode path must resolve through stable canonical handles."""
+    root = tmp_path / "allowed"
+    source = root / "évidence" / "nested" / "synthetic.log"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"synthetic\n")
+    with safe._WindowsMetadataProof(source, root) as proof:
+        assert proof.metadata().size_bytes == 10
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+def test_windows_short_alias_native(tmp_path, record_property):
+    """Canonical handle identities must accept an observed8.3 alias without literal-prefix
+    guesses.
+    """
+    source = tmp_path / "long-synthetic-log-name.log"
+    source.write_bytes(b"synthetic\n")
+    native = safe._NativeWindows(safe._MetadataBudget())
+    c, w = native.ctypes, native.w
+    function = c.WinDLL("kernel32", use_last_error=True).GetShortPathNameW
+    function.argtypes, function.restype = [w.LPCWSTR, w.LPWSTR, w.DWORD], w.DWORD
+    buffer = c.create_unicode_buffer(32768)
+    length = function(str(source), buffer, len(buffer))
+    if not 0 < length < len(buffer) or buffer.value == str(source):
+        record_property("required_capability_status", "unsupported-required:short-name-fixture")
+        pytest.xfail("unsupported-required: no distinct short-name fixture")
+    alias = Path(buffer.value)
+    with safe._WindowsMetadataProof(alias, alias.parent) as proof:
+        identity = proof.metadata()
+    with safe._WindowsMetadataProof(source, tmp_path) as proof:
+        assert proof.metadata() == identity
+    record_property("distinct_short_alias_observed", "true")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+@pytest.mark.parametrize("kind", ["directory", "hardlink", "missing"])
+def test_windows_nonregular_native(tmp_path, kind):
+    """Actual directory, multiple-link or missing final sources must never authorize metadata."""
+    source = tmp_path / "synthetic.log"
+    if kind == "directory":
+        source.mkdir()
+    elif kind == "hardlink":
+        source.write_bytes(b"synthetic\n")
+        os.link(source, tmp_path / "second.log")
+    with pytest.raises(safe.PathPolicyError):
+        safe._WindowsMetadataProof(source, tmp_path)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+def test_windows_junction_ancestor_native(tmp_path, record_property):
+    """A real owned junction to an outside sibling must be refused before following it further."""
+    import _winapi
+
+    allowed, outside = tmp_path / "allowed", tmp_path / "outside"
+    allowed.mkdir()
+    outside.mkdir()
+    (outside / "synthetic.log").write_bytes(b"synthetic\n")
+    junction = allowed / "junction"
+    _winapi.CreateJunction(str(outside), str(junction))
+    try:
+        with pytest.raises(safe.PathPolicyError) as error:
+            safe._WindowsMetadataProof(junction / "synthetic.log", allowed)
+        assert error.value.capability == "windows-reparse-or-recall"
+    finally:
+        os.rmdir(junction)  # Remove exactly the owned junction, never its target tree.
+    assert outside.is_dir()
+    record_property("native_junction_cleanup", "complete")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+def test_windows_final_symlink_native(tmp_path, record_property):
+    """An actual final symlink must refuse; unavailable creation privilege is a required finding."""
+    source = tmp_path / "synthetic.log"
+    source.write_bytes(b"synthetic\n")
+    link = tmp_path / "link.log"
+    try:
+        link.symlink_to(source)
+    except OSError as error:
+        record_property("required_capability_status", "unsupported-required:symlink-fixture")
+        record_property("native_error_code", error.winerror)
+        pytest.xfail("unsupported-required: native symlink fixture unavailable")
+    try:
+        with pytest.raises(safe.PathPolicyError) as error:
+            safe._WindowsMetadataProof(link, tmp_path)
+        assert error.value.capability == "windows-reparse-or-recall"
+    finally:
+        link.unlink()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+@pytest.mark.parametrize("which", ["source", "ancestor"])
+def test_windows_pinned_rename_native(tmp_path, which, record_property):
+    """Actual pinned file/directory rename attempts must fail or invalidate before reuse."""
+    root = tmp_path / "allowed"
+    nested = root / "nested"
+    nested.mkdir(parents=True)
+    source = nested / "synthetic.log"
+    source.write_bytes(b"synthetic\n")
+    target = source if which == "source" else nested
+    with safe._WindowsMetadataProof(source, root) as proof:
+        try:
+            target.rename(tmp_path / "moved")
+        except OSError as error:
+            assert error.winerror in (5, 32, 33)
+            try:
+                assert proof.metadata().file_id > 0
+            except safe.PathPolicyError as changed:
+                assert changed.code == "SOURCE_CHANGED"
+                record_property("native_rename_outcome", "blocked-and-invalidated")
+            else:
+                record_property("native_rename_outcome", "blocked")
+        else:
+            with pytest.raises(safe.PathPolicyError):
+                proof.metadata()
+            record_property("native_rename_outcome", "detected")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
+def test_windows_rewrite_and_enter_failure_cleanup_native(configured):
+    """A restored-mtime rewrite must invalidate metadata and failed context entry must
+    close handles.
+    """
+    _, source = configured
+    native = safe._NativeWindows(safe._MetadataBudget())
+    proof = safe._WindowsMetadataProof(source, source.parent, _native=native)
+    old = source.stat()
+    source.write_bytes(b"changed\n")
+    os.utime(source, ns=(old.st_atime_ns, old.st_mtime_ns))
+    with pytest.raises(safe.PathPolicyError) as error:
+        proof.__enter__()
+    assert error.value.code == "SOURCE_CHANGED"
+    assert native.open_count == native.close_count
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual ordinal comparison")
+def test_windows_ordinal_components_native():
+    """Windows ordinal comparison must reject sibling prefixes and Unicode casefold expansion."""
+    native = safe._NativeWindows(safe._MetadataBudget())
+    volume = "\\\\?\\Volume{11111111-2222-3333-4444-555555555555}\\"
+    assert native.ordinal_equal("Logs", "LOGS")
+    assert not native.ordinal_equal("Straße", "STRASSE")
+    assert safe._windows_under(native, volume + "Logs\\file", volume + "LOGS")
+    assert not safe._windows_under(native, volume + "Logs-other\\file", volume + "Logs")
+    assert not safe._windows_under(native, volume + "Logs", volume + "Logs")
+
+
+class MockWindowsMetadata:
+    """Injected mechanism only; cannot attest native Windows capability."""
+
+    def __init__(self):
+        self.opened = {}
+        self.closed = []
+        self.paths = {}
+        self.change = None
+
+    def open(self, path):
+        key = str(path)
+        if key not in self.paths:
+            self.paths[key] = len(self.paths) + 1
+        handle = len(self.opened) + 1
+        canonical = "\\\\?\\Volume{11111111-2222-3333-4444-555555555555}\\" + "\\".join(
+            path.parts[1:]
+        )
+        directory = not path.name.endswith(".log")
+        snapshot = safe._WindowsSnapshot(
+            safe.FileIdentity(42, self.paths[key], 0, 2, 3),
+            0x10 if directory else 0x20,
+            0,
+            directory,
+            1,
+            False,
+            False,
+            canonical,
+        )
+        self.opened[handle] = snapshot
+        return handle
+
+    def snapshot(self, handle):
+        value = self.opened[handle]
+        return value if self.change is None else self.change(value)
+
+    def close(self, handle):
+        assert handle not in self.closed
+        self.closed.append(handle)
+
+    @staticmethod
+    def ordinal_equal(left, right):
+        return left.upper() == right.upper()  # ASCII mechanism cases only, never Unicode proof.
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("tag", 0xA0000003),
+        ("attributes", 0x1000),
+        ("attributes", 0x40000),
+        ("attributes", 0x400000),
+        ("attributes", 0x80000000),
+        ("case_sensitive", True),
+        ("delete_pending", True),
+        ("attributes", 0x20),
+        ("links", 0),
+    ],
+)
+def test_mock_windows_unsafe_metadata_refused(tmp_path, field, value):
+    """Unknown/reparse/recall/case/delete state must refuse and close every acquired mock handle."""
+    native = MockWindowsMetadata()
+    native.change = lambda snapshot: replace(snapshot, **{field: value})
+    with pytest.raises(safe.PathPolicyError):
+        safe._WindowsMetadataProof(tmp_path / "synthetic.log", tmp_path, _native=native)
+    assert sorted(native.closed) == sorted(native.opened)
+
+
+@pytest.mark.parametrize("field", ["file_id", "volume_id", "change_time_ns"])
+def test_mock_windows_postcheck_identity_change(tmp_path, field):
+    """Post-acquisition metadata mutation must invalidate the proof instead of reusing old
+    identity.
+    """
+    native = MockWindowsMetadata()
+    with safe._WindowsMetadataProof(tmp_path / "synthetic.log", tmp_path, _native=native) as proof:
+        native.change = lambda snapshot: replace(
+            snapshot, identity=replace(snapshot.identity, **{field: 999})
+        )
+        with pytest.raises(safe.PathPolicyError):
+            proof.metadata()
+        native.change = None
+        with pytest.raises(safe.PathPolicyError):
+            proof.metadata()  # A failed validation poisons/closes the proof permanently.
+    assert sorted(native.closed) == sorted(native.opened)
+
+
+def test_mock_windows_canonical_budget_and_error_cleanup(tmp_path, monkeypatch):
+    """Canonical/intermediate budgets and unexpected OS failures must close handles without
+    raw echo.
+    """
+    native = MockWindowsMetadata()
+    monkeypatch.setattr(safe, "MAX_WINDOWS_CANONICAL_UNITS", 1)
+    with pytest.raises(safe.PathPolicyError) as error:
+        safe._WindowsMetadataProof(tmp_path / "synthetic.log", tmp_path, _native=native)
+    assert error.value.capability == "windows-canonical-budget"
+    assert sorted(native.closed) == sorted(native.opened)
+
+
+def test_mock_windows_call_and_deadline_bounds(monkeypatch):
+    """Native operation limits must stop before issuing excess calls, including cooperative
+    expiry.
+    """
+    monkeypatch.setattr(safe, "monotonic", lambda: 0)
+    budget = safe._MetadataBudget()
+    budget.calls = safe.MAX_WINDOWS_METADATA_CALLS
+    calls = []
+    with pytest.raises(safe.PathPolicyError):
+        budget.call(lambda: calls.append(True))
+    assert calls == []
+    monkeypatch.setattr(safe, "monotonic", lambda: 3)
+    with pytest.raises(safe.PathPolicyError) as error:
+        budget.check()
+    assert error.value.capability == "windows-metadata-deadline"
+
+
+def test_mock_windows_malformed_canonical_and_config_bounds(tmp_path):
+    """Malformed internal names or excess configured components/chars must fail before
+    native I/O.
+    """
+    for value in ("C:\\file", "\\\\server\\file", "\\\\?\\Volume{bad}\\file"):
+        with pytest.raises(safe.PathPolicyError):
+            safe._windows_parts(value)
+    for path in (str(tmp_path / ("x" * 32768)), str(tmp_path.joinpath(*(["x"] * 257)))):
+        with pytest.raises(safe.PathPolicyError):
+            safe._configured_path(path)
+
+
+def test_mock_windows_deadline_after_open_closes_new_handle(tmp_path, monkeypatch):
+    """A deadline crossed inside CreateFile must still close the just-acquired metadata handle."""
+    import ctypes
+
+    clock = [0]
+    monkeypatch.setattr(safe, "monotonic", lambda: clock[0])
+    native = object.__new__(safe._NativeWindows)
+    native.budget = safe._MetadataBudget()
+    native.ctypes = ctypes
+    native.open_count = native.close_count = 0
+    native.drive_type = lambda anchor: 3
+    closed = []
+    native.close_handle = lambda handle: closed.append(handle) or True
+
+    def create(*args):
+        assert args[1] == 0x80
+        clock[0] = 3
+        return 123
+
+    native.create = create
+    with pytest.raises(safe.PathPolicyError) as error:
+        native.open(tmp_path / "synthetic.log")
+    assert error.value.capability == "windows-metadata-deadline"
+    assert closed == [123] and native.open_count == native.close_count == 1
+
+
+def test_mock_windows_unexpected_error_is_sanitized_and_closed(tmp_path, monkeypatch):
+    """Unexpected backend failures must hide raw diagnostics and close every acquired handle."""
+    native = MockWindowsMetadata()
+
+    def fail(handle):
+        raise OSError("private-path-and-content-sentinel")
+
+    monkeypatch.setattr(native, "snapshot", fail)
+    with pytest.raises(safe.PathPolicyError) as error:
+        safe._WindowsMetadataProof(tmp_path / "synthetic.log", tmp_path, _native=native)
+    assert str(error.value) == "The source changed during authorized access."
+    assert error.value.__suppress_context__
+    assert sorted(native.closed) == sorted(native.opened)
+
+
+def test_mock_windows_root_shape_cannot_expand_authority(tmp_path):
+    """Internal metadata entry must reuse the existing broad-root refusal before any native open."""
+    native = MockWindowsMetadata()
+    with pytest.raises(safe.PathPolicyError):
+        safe._WindowsMetadataProof(
+            tmp_path / "synthetic.log", Path(tmp_path.anchor), _native=native
+        )
+    assert native.opened == {}
+
+
+def test_mock_windows_containment_negative_control(tmp_path, monkeypatch):
+    """The containment assertion must fail when the actual ancestry comparison is sabotaged."""
+    native = MockWindowsMetadata()
+
+    def other_tree(snapshot):
+        if snapshot.directory:
+            return snapshot
+        parts = safe._windows_parts(snapshot.final_path)
+        return replace(snapshot, final_path=parts[0] + "\\".join(("different", *parts[2:])))
+
+    native.change = other_tree
+    with pytest.raises(safe.PathPolicyError):
+        safe._WindowsMetadataProof(tmp_path / "synthetic.log", tmp_path, _native=native)
+    sabotaged = MockWindowsMetadata()
+    sabotaged.change = other_tree
+    monkeypatch.setattr(safe, "_windows_under", lambda *args, **kwargs: True)
+
+    def must_refuse():
+        try:
+            with safe._WindowsMetadataProof(
+                tmp_path / "synthetic.log", tmp_path, _native=sabotaged
+            ):
+                pass
+        except safe.PathPolicyError:
+            return
+        raise AssertionError("containment sabotage escaped the expected rejection")
+
+    with pytest.raises(AssertionError, match="containment sabotage"):
+        must_refuse()
+
+
+def test_mock_domain_error_suppresses_existing_raw_context():
+    """Sanitized domain failures must suppress a caller's active raw OS exception context."""
+    import traceback
+
+    def domain_failure():
+        raise safe.PathPolicyError("SOURCE_CHANGED")
+
+    try:
+        try:
+            raise OSError("private-path-and-content-sentinel")
+        except OSError:
+            domain_failure()
+    except safe.PathPolicyError as error:
+        rendered = "".join(traceback.format_exception(error))
+        # Traceback includes source lines but must not print the prior OS exception value.
+        assert "OSError: private-path-and-content-sentinel" not in rendered
+        assert error.__suppress_context__
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata mutation")
+def test_windows_directory_entry_mutation_native(configured, record_property):
+    """An owned directory-entry mutation must explicitly invalidate a previously stable chain."""
+    _, source = configured
+    with safe._WindowsMetadataProof(source, source.parent) as proof:
+        (source.parent / "new-owned-entry").mkdir()
+        with pytest.raises(safe.PathPolicyError) as error:
+            proof.metadata()
+        assert error.value.code == "SOURCE_CHANGED"
+        assert error.value.capability in {
+            "windows-changed-size_bytes",
+            "windows-changed-mtime_ns",
+            "windows-changed-change_time_ns",
+        }
+        record_property("native_mutation_field", error.value.capability)

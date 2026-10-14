@@ -12,6 +12,7 @@ import stat
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
+from time import monotonic
 from typing import Any
 
 _MESSAGES = {
@@ -28,6 +29,13 @@ _DEVICE = re.compile(
     r"(?:CON|PRN|AUX|NUL|CLOCK\$|CONIN\$|CONOUT\$|COM[0-9¹²³]|LPT[0-9¹²³])(?:\..*)?\Z", re.I
 )
 _WINDOWS_OBSERVED = False
+_WINDOWS_CHAIN_OBSERVED = False
+_WINDOWS_API_UNAVAILABLE: set[str] = set()
+MAX_WINDOWS_COMPONENTS = 256
+MAX_WINDOWS_PATH_UNITS = 32767
+MAX_WINDOWS_CANONICAL_UNITS = 262144
+MAX_WINDOWS_METADATA_CALLS = 4096
+WINDOWS_METADATA_SECONDS = 2.0
 
 
 class PathPolicyError(Exception):
@@ -41,6 +49,7 @@ class PathPolicyError(Exception):
         self.hint = "Use an explicitly configured local source with supported safety checks."
         self.capability = capability
         super().__init__(self.message)
+        self.__suppress_context__ = True
 
     def __repr__(self) -> str:
         return f"PathPolicyError(code={self.code!r})"
@@ -73,6 +82,17 @@ def capabilities() -> dict[str, Any]:
         "windows_metadata_observed": _WINDOWS_OBSERVED if windows else False,
         "windows_no_recall_race_proven": False,
         "windows_final_containment_authorization_proven": False,
+        "windows_metadata_chain_observed": _WINDOWS_CHAIN_OBSERVED if windows else False,
+        "windows_capability_status": {
+            "ancestor_metadata": "observed"
+            if _WINDOWS_CHAIN_OBSERVED
+            else "implemented-unobserved",
+            "data_authorization": "unimplemented",
+            "no_recall_race": "unproven",
+            "measured_api_unavailable": sorted(_WINDOWS_API_UNAVAILABLE),
+        }
+        if windows
+        else {},
         "data_access_available": not windows and proc and hasattr(os, "O_NOFOLLOW"),
         "unsupported_required": (
             ["windows-no-recall-race", "windows-final-containment-authorization"]
@@ -91,6 +111,8 @@ def _configured_path(value: str | Path) -> Path:
     if not isinstance(value, (str, Path)):
         raise PathPolicyError("CONFIG_INVALID")
     text = str(value)
+    if len(text) > MAX_WINDOWS_PATH_UNITS:
+        raise PathPolicyError("CONFIG_INVALID")
     # Reject Windows ambiguity on every host, including relative drive and ADS forms.
     win = PureWindowsPath(text)
     if (
@@ -106,7 +128,7 @@ def _configured_path(value: str | Path) -> Path:
     ):
         raise PathPolicyError("CONFIG_INVALID")
     path = Path(text)
-    if not path.is_absolute():
+    if not path.is_absolute() or len(path.parts) > MAX_WINDOWS_COMPONENTS:
         raise PathPolicyError("CONFIG_INVALID")
     return path
 
@@ -300,89 +322,428 @@ class AuthorizedReadHandle:
         self.close()
 
 
-def _windows_probe(path: Path) -> tuple[FileIdentity, int, str]:
-    """Native metadata-only capability spike. Never used to authorize data reads.
+class _MetadataBudget:
+    """Bound call count and check elapsed time around each synchronous native call.
 
-    Caller must supply a newly-created synthetic fixture. The returned path is
-    private authorization data; never include it in a receipt or public response.
+    This cannot preempt a blocked kernel call. An outer process timeout remains
+    necessary for adversarial driver stalls; no hard native-I/O latency claim.
     """
-    if os.name != "nt":
-        raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-metadata")
-    import ctypes
-    from ctypes import wintypes
 
-    class BasicInfo(ctypes.Structure):
-        _fields_ = [
-            ("creation", ctypes.c_longlong),
-            ("access", ctypes.c_longlong),
-            ("write", ctypes.c_longlong),
-            ("change", ctypes.c_longlong),
-            ("attributes", wintypes.DWORD),
-        ]
+    def __init__(self) -> None:
+        self.calls = 0
+        self.deadline = monotonic() + WINDOWS_METADATA_SECONDS
 
-    class HandleInfo(ctypes.Structure):
-        _fields_ = [
-            ("attributes", wintypes.DWORD),
-            ("creation", wintypes.FILETIME),
-            ("access", wintypes.FILETIME),
-            ("write", wintypes.FILETIME),
-            ("volume", wintypes.DWORD),
-            ("size_high", wintypes.DWORD),
-            ("size_low", wintypes.DWORD),
-            ("links", wintypes.DWORD),
-            ("index_high", wintypes.DWORD),
-            ("index_low", wintypes.DWORD),
-        ]
+    def check(self) -> None:
+        if monotonic() >= self.deadline:
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-metadata-deadline")
 
-    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-    create = kernel.CreateFileW
-    create.argtypes = [
-        wintypes.LPCWSTR,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        ctypes.c_void_p,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.HANDLE,
-    ]
-    create.restype = wintypes.HANDLE
-    close = kernel.CloseHandle
-    close.argtypes = [wintypes.HANDLE]
-    close.restype = wintypes.BOOL
-    basic_query = kernel.GetFileInformationByHandleEx
-    basic_query.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
-    basic_query.restype = wintypes.BOOL
-    identity_query = kernel.GetFileInformationByHandle
-    identity_query.argtypes = [wintypes.HANDLE, ctypes.POINTER(HandleInfo)]
-    identity_query.restype = wintypes.BOOL
-    final_query = kernel.GetFinalPathNameByHandleW
-    final_query.argtypes = [wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD]
-    final_query.restype = wintypes.DWORD
-    # FILE_READ_ATTRIBUTES; share read/write/delete; OPEN_EXISTING; flags are
-    # OPEN_REPARSE_POINT | OPEN_NO_RECALL | BACKUP_SEMANTICS. No FILE_READ_DATA.
-    handle = create(str(path), 0x80, 7, None, 3, 0x02300000, None)
-    if handle == ctypes.c_void_p(-1).value:
-        raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-metadata")
-    try:
-        basic, info = BasicInfo(), HandleInfo()
-        buffer = ctypes.create_unicode_buffer(32768)
-        length = final_query(handle, buffer, len(buffer), 0)
-        if (
-            not basic_query(handle, 0, ctypes.byref(basic), ctypes.sizeof(basic))
-            or not identity_query(handle, ctypes.byref(info))
-            or not 0 < length < len(buffer)
-        ):
+    def start_call(self) -> None:
+        self.check()
+        if self.calls == MAX_WINDOWS_METADATA_CALLS:
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-metadata-call-limit")
+        self.calls += 1
+
+    def call(self, function, *args):
+        self.start_call()
+        result = function(*args)
+        self.check()
+        return result
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _WindowsSnapshot:
+    identity: FileIdentity
+    attributes: int
+    tag: int
+    directory: bool
+    links: int
+    delete_pending: bool
+    case_sensitive: bool
+    final_path: str
+
+    def __repr__(self) -> str:
+        return "WindowsSnapshot(<private metadata>)"
+
+
+class _NativeWindows:
+    """Read-attributes-only Win32 primitives; no source-data API is bound here."""
+
+    def __init__(self, budget: _MetadataBudget) -> None:
+        if os.name != "nt":
             raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-metadata")
-        global _WINDOWS_OBSERVED
-        _WINDOWS_OBSERVED = True
+        import ctypes
+        from ctypes import wintypes
+
+        self.ctypes, self.w = ctypes, wintypes
+        self.budget = budget
+        self.open_count = self.close_count = 0
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        def bind(name, args, result):
+            try:
+                function = getattr(kernel, name)
+            except AttributeError:
+                _WINDOWS_API_UNAVAILABLE.add(name)
+                raise PathPolicyError(
+                    "SOURCE_NOT_LOCAL", capability="windows-metadata-api"
+                ) from None
+            function.argtypes, function.restype = args, result
+            return function
+
+        self.create = bind(
+            "CreateFileW",
+            [
+                wintypes.LPCWSTR,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                ctypes.c_void_p,
+                wintypes.DWORD,
+                wintypes.DWORD,
+                wintypes.HANDLE,
+            ],
+            wintypes.HANDLE,
+        )
+        self.close_handle = bind("CloseHandle", [wintypes.HANDLE], wintypes.BOOL)
+        self.query = bind(
+            "GetFileInformationByHandleEx",
+            [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD],
+            wintypes.BOOL,
+        )
+        self.final = bind(
+            "GetFinalPathNameByHandleW",
+            [wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD],
+            wintypes.DWORD,
+        )
+        self.file_type = bind("GetFileType", [wintypes.HANDLE], wintypes.DWORD)
+        self.drive_type = bind("GetDriveTypeW", [wintypes.LPCWSTR], wintypes.UINT)
+        self.volume = bind(
+            "GetVolumeInformationByHandleW",
+            [
+                wintypes.HANDLE,
+                wintypes.LPWSTR,
+                wintypes.DWORD,
+                ctypes.POINTER(wintypes.DWORD),
+                ctypes.POINTER(wintypes.DWORD),
+                ctypes.POINTER(wintypes.DWORD),
+                wintypes.LPWSTR,
+                wintypes.DWORD,
+            ],
+            wintypes.BOOL,
+        )
+        self.compare = bind(
+            "CompareStringOrdinal",
+            [wintypes.LPCWSTR, ctypes.c_int, wintypes.LPCWSTR, ctypes.c_int, wintypes.BOOL],
+            ctypes.c_int,
+        )
+
+        class Basic(ctypes.Structure):
+            _fields_ = [
+                ("creation", ctypes.c_longlong),
+                ("access", ctypes.c_longlong),
+                ("write", ctypes.c_longlong),
+                ("change", ctypes.c_longlong),
+                ("attributes", wintypes.DWORD),
+            ]
+
+        class Standard(ctypes.Structure):
+            _fields_ = [
+                ("allocation", ctypes.c_longlong),
+                ("size", ctypes.c_longlong),
+                ("links", wintypes.DWORD),
+                ("deleted", ctypes.c_ubyte),
+                ("directory", ctypes.c_ubyte),
+            ]
+
+        class AttributeTag(ctypes.Structure):
+            _fields_ = [("attributes", wintypes.DWORD), ("tag", wintypes.DWORD)]
+
+        class Identity(ctypes.Structure):
+            _fields_ = [("volume", ctypes.c_ulonglong), ("file", ctypes.c_ubyte * 16)]
+
+        class Case(ctypes.Structure):
+            _fields_ = [("flags", wintypes.DWORD)]
+
+        self.Basic, self.Standard, self.AttributeTag = Basic, Standard, AttributeTag
+        self.Identity, self.Case = Identity, Case
+
+    def __repr__(self) -> str:
+        return "NativeWindows(<metadata-only>)"
+
+    def open(self, path: Path) -> int:
+        # No network/removable filesystem and no FILE_READ_DATA or GENERIC_READ.
+        if self.budget.call(self.drive_type, path.anchor) != 3:
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-fixed-volume")
+        self.budget.start_call()
+        handle = self.create(str(path), 0x80, 3, None, 3, 0x02300000, None)
+        if handle == self.ctypes.c_void_p(-1).value:
+            error = self.ctypes.get_last_error()
+            code = "SOURCE_MISSING" if error in (2, 3) else "PATH_FORBIDDEN"
+            raise PathPolicyError(code) from None
+        self.open_count += 1
+        try:
+            self.budget.check()
+        except BaseException:
+            self.close(handle)
+            raise
+        return handle
+
+    def close(self, handle: int) -> None:
+        # Cleanup must still run after call/deadline exhaustion. No retries.
+        if not self.close_handle(handle):
+            raise PathPolicyError("SOURCE_CHANGED", capability="windows-handle-cleanup")
+        self.close_count += 1
+
+    def _info(self, handle, info_class, info_type):
+        value = info_type()
+        if not self.budget.call(
+            self.query, handle, info_class, self.ctypes.byref(value), self.ctypes.sizeof(value)
+        ):
+            if self.ctypes.get_last_error() in (1, 50, 87):
+                _WINDOWS_API_UNAVAILABLE.add(f"information-class-{info_class}")
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability=f"windows-info-{info_class}")
+        return value
+
+    def ordinal_equal(self, left: str, right: str) -> bool:
+        result = self.budget.call(self.compare, left, -1, right, -1, True)
+        if result not in (1, 2, 3):
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-ordinal-comparison")
+        return result == 2
+
+    def snapshot(self, handle: int) -> _WindowsSnapshot:
+        if self.budget.call(self.file_type, handle) != 1:
+            raise PathPolicyError("NOT_REGULAR_FILE")
+        fs = self.ctypes.create_unicode_buffer(32)
+        if not self.budget.call(self.volume, handle, None, 0, None, None, None, fs, len(fs)):
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-filesystem")
+        if fs.value != "NTFS":
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-ntfs")
+        basic = self._info(handle, 0, self.Basic)
+        standard = self._info(handle, 1, self.Standard)
+        tags = self._info(handle, 9, self.AttributeTag)
+        identity = self._info(handle, 18, self.Identity)
+        case = self._info(handle, 23, self.Case).flags if standard.directory else 0
+        if case not in (0, 1) or basic.attributes != tags.attributes:
+            raise PathPolicyError("SOURCE_CHANGED")
+        buffer = self.ctypes.create_unicode_buffer(MAX_WINDOWS_PATH_UNITS + 1)
+        length = self.budget.call(self.final, handle, buffer, len(buffer), 1)
+        if not 0 < length < len(buffer):
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-final-guid-path")
         epoch = 116444736000000000
-        identity = FileIdentity(
-            info.volume,
-            info.index_high << 32 | info.index_low,
-            info.size_high << 32 | info.size_low,
+        file_identity = FileIdentity(
+            identity.volume,
+            int.from_bytes(identity.file, "little"),
+            standard.size,
             (basic.write - epoch) * 100,
             (basic.change - epoch) * 100,
         )
-        return identity, basic.attributes, buffer.value
+        global _WINDOWS_OBSERVED
+        _WINDOWS_OBSERVED = True
+        return _WindowsSnapshot(
+            file_identity,
+            tags.attributes,
+            tags.tag,
+            bool(standard.directory),
+            standard.links,
+            bool(standard.deleted),
+            bool(case),
+            buffer.value,
+        )
+
+
+def _windows_parts(value: str) -> tuple[str, ...]:
+    if (
+        type(value) is not str
+        or len(value) > MAX_WINDOWS_PATH_UNITS
+        or "\x00" in value
+        or any(part in (".", "..") for part in value.split("\\"))
+    ):
+        raise PathPolicyError("PATH_FORBIDDEN")
+    parts = PureWindowsPath(value).parts
+    if (
+        not parts
+        or len(parts) > MAX_WINDOWS_COMPONENTS
+        or not re.fullmatch(
+            r"\\\\\?\\Volume\{[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\}\\", parts[0]
+        )
+    ):
+        raise PathPolicyError("PATH_FORBIDDEN")
+    return parts
+
+
+def _windows_under(native, child: str, parent: str, *, strict: bool = True) -> bool:
+    children, parents = _windows_parts(child), _windows_parts(parent)
+    return (len(children) > len(parents) if strict else len(children) >= len(parents)) and all(
+        native.ordinal_equal(left, right) for left, right in zip(children, parents, strict=False)
+    )
+
+
+def _windows_validate(snapshot: _WindowsSnapshot, *, directory: bool) -> None:
+    known = (
+        0x1 | 0x2 | 0x4 | 0x10 | 0x20 | 0x80 | 0x100 | 0x800 | 0x2000 | 0x4000 | 0x8000 | 0x20000
+    )
+    if snapshot.tag or snapshot.attributes & (0x400 | 0x1000 | 0x40000 | 0x400000):
+        raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-reparse-or-recall")
+    if snapshot.attributes & ~known or snapshot.case_sensitive:
+        raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-attributes-or-case")
+    if (
+        snapshot.directory != directory
+        or bool(snapshot.attributes & 0x10) != snapshot.directory
+        or snapshot.links < 1
+        or snapshot.delete_pending
+        or (not directory and snapshot.links != 1)
+    ):
+        raise PathPolicyError("NOT_REGULAR_FILE")
+    if (
+        snapshot.identity.file_id <= 0
+        or snapshot.identity.volume_id < 0
+        or snapshot.identity.size_bytes < 0
+        or snapshot.identity.change_time_ns is None
+    ):
+        raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-file-identity")
+    _windows_parts(snapshot.final_path)
+
+
+class _WindowsMetadataProof:
+    """Internal metadata authorization only. Never provides a data handle or read API."""
+
+    def __init__(self, path: Path, root: Path, *, _native=None) -> None:
+        path, root = _configured_path(path), _configured_path(root)
+        # Reuse the canonical configured-root/opaque-ID shape gate; no source I/O.
+        SafePathPolicy([root], {"metadata": path})
+        if (
+            not path.is_relative_to(root)
+            or path == root
+            or len(str(path).encode("utf-16-le")) // 2 > MAX_WINDOWS_PATH_UNITS
+        ):
+            raise PathPolicyError("PATH_FORBIDDEN")
+        self.__budget = _MetadataBudget()
+        self.__native = _NativeWindows(self.__budget) if _native is None else _native
+        self.__handles: list[tuple[int, _WindowsSnapshot, bool]] = []
+        self.__closed = False
+        self.__canonical_units = 0
+        try:
+            root_info = self._retain(root, directory=True)
+            previous = None
+            chain = list(reversed(path.parents)) + [path]
+            for index, part in enumerate(chain):
+                current = self._retain(part, directory=index < len(chain) - 1)
+                if previous is not None and (
+                    current.identity.volume_id != previous.identity.volume_id
+                    or not _windows_under(self.__native, current.final_path, previous.final_path)
+                    or len(_windows_parts(current.final_path))
+                    != len(_windows_parts(previous.final_path)) + 1
+                ):
+                    raise PathPolicyError("PATH_FORBIDDEN")
+                if index == len(root.parts) - 1 and (
+                    current.identity != root_info.identity
+                    or not self.__native.ordinal_equal(current.final_path, root_info.final_path)
+                ):
+                    raise PathPolicyError("PATH_FORBIDDEN")
+                previous = current
+            self.__final = current.identity
+            if not _windows_under(self.__native, current.final_path, root_info.final_path):
+                raise PathPolicyError("PATH_FORBIDDEN")
+            self.metadata()
+            if type(self.__native) is _NativeWindows:
+                global _WINDOWS_CHAIN_OBSERVED
+                _WINDOWS_CHAIN_OBSERVED = True
+        except BaseException as error:
+            self.close()
+            if isinstance(error, PathPolicyError) or not isinstance(error, Exception):
+                raise
+            raise PathPolicyError("SOURCE_CHANGED") from None
+
+    def __repr__(self) -> str:
+        return f"WindowsMetadataProof(closed={self.__closed})"
+
+    def _retain(self, path: Path, *, directory: bool) -> _WindowsSnapshot:
+        self.__budget.check()
+        handle = self.__native.open(path)
+        try:
+            snapshot = self.__native.snapshot(handle)
+        except BaseException:
+            self.__native.close(handle)
+            raise
+        self.__handles.append((handle, snapshot, directory))
+        self.__canonical_units += len(snapshot.final_path.encode("utf-16-le")) // 2
+        if self.__canonical_units > MAX_WINDOWS_CANONICAL_UNITS:
+            raise PathPolicyError("SOURCE_NOT_LOCAL", capability="windows-canonical-budget")
+        _windows_validate(snapshot, directory=directory)
+        return snapshot
+
+    def metadata(self) -> FileIdentity:
+        if self.__closed:
+            raise PathPolicyError("SOURCE_CHANGED")
+        try:
+            for handle, before, directory in self.__handles:
+                self.__budget.check()
+                after = self.__native.snapshot(handle)
+                _windows_validate(after, directory=directory)
+                for field in ("volume_id", "file_id", "size_bytes", "mtime_ns", "change_time_ns"):
+                    if getattr(before.identity, field) != getattr(after.identity, field):
+                        raise PathPolicyError(
+                            "SOURCE_CHANGED", capability=f"windows-changed-{field}"
+                        )
+                if (
+                    before.attributes,
+                    before.tag,
+                    before.directory,
+                    before.links,
+                    before.delete_pending,
+                    before.case_sensitive,
+                ) != (
+                    after.attributes,
+                    after.tag,
+                    after.directory,
+                    after.links,
+                    after.delete_pending,
+                    after.case_sensitive,
+                ):
+                    raise PathPolicyError(
+                        "SOURCE_CHANGED", capability="windows-changed-object-state"
+                    )
+                if not self.__native.ordinal_equal(before.final_path, after.final_path):
+                    raise PathPolicyError("SOURCE_CHANGED", capability="windows-changed-final-path")
+            self.__budget.check()
+            return self.__final
+        except PathPolicyError:
+            self.close()
+            raise
+        except Exception:
+            self.close()
+            raise PathPolicyError("SOURCE_CHANGED") from None
+
+    def close(self) -> None:
+        if not self.__closed:
+            self.__closed = True
+            failed = False
+            for handle, _snapshot, _directory in reversed(self.__handles):
+                try:
+                    self.__native.close(handle)
+                except Exception:
+                    failed = True
+            self.__handles.clear()
+            if failed:
+                raise PathPolicyError("SOURCE_CHANGED", capability="windows-handle-cleanup")
+
+    def __enter__(self) -> _WindowsMetadataProof:
+        try:
+            self.metadata()
+        except BaseException:
+            self.close()
+            raise
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self.close()
+
+
+def _windows_probe(path: Path) -> tuple[FileIdentity, int, str]:
+    """Owned synthetic metadata diagnostic; no authorization or no-recall data proof."""
+    native = _NativeWindows(_MetadataBudget())
+    handle = native.open(_configured_path(path))
+    try:
+        snapshot = native.snapshot(handle)
+        return snapshot.identity, snapshot.attributes, snapshot.final_path
     finally:
-        close(handle)
+        native.close(handle)
