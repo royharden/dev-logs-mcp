@@ -64,3 +64,30 @@ def test_config_size_limit(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("sys.argv", ["dev-logs-mcp", "check-config", str(config_path)])
     assert main() == 2
     assert "CONFIG_INVALID" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"timezone": "Not/A/Timezone"},
+        {"kind": "directory", "extensions": []},
+        {"kind": "directory", "extensions": ["../log"]},
+        {"kind": "directory", "extensions": [".log", ".log"]},
+        {"kind": "device"},
+    ],
+)
+def test_source_format_authority_rejects_invalid_timezone_and_directory_filters(patch):
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(
+            {"allowed_roots": ["."], "sources": [{"id": "web", "path": "web.log", **patch}]}
+        )
+
+
+def test_directory_shape_is_one_explicit_configured_source_not_discovery():
+    config = AppConfig.model_validate(
+        {
+            "allowed_roots": ["."],
+            "sources": [{"id": "web", "path": "logs", "kind": "directory", "extensions": [".log"]}],
+        }
+    )
+    assert config.sources[0].kind == "directory"

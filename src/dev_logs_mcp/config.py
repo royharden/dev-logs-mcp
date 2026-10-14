@@ -1,10 +1,12 @@
 """Pure configuration validation; filesystem authorization is not implemented here."""
 
 import tomllib
+from typing import Literal
 
 from pydantic import Field, model_validator
 
 from dev_logs_mcp.contracts import MAX_SOURCES, BoundaryModel, SourceId
+from dev_logs_mcp.parse import source_timezone
 
 
 class SourceConfig(BoundaryModel):
@@ -12,11 +14,24 @@ class SourceConfig(BoundaryModel):
     path: str = Field(min_length=1, max_length=4096)
     format: str = Field(default="auto", pattern=r"^(auto|plain_iso|jsonl|plain)$")
     timezone: str = Field(default="UTC", min_length=1, max_length=128)
+    kind: Literal["file", "directory"] = "file"
+    extensions: list[str] = Field(default_factory=lambda: [".log", ".jsonl", ".txt"], max_length=16)
 
     @model_validator(mode="after")
     def no_null_path(self):
         if "\x00" in self.path:
             raise ValueError("path contains NUL")
+        source_timezone(self.timezone)
+        if self.kind == "directory" and not self.extensions:
+            raise ValueError("directory sources require explicit extensions")
+        if len(set(self.extensions)) != len(self.extensions) or any(
+            not 2 <= len(ext) <= 16
+            or not ext.startswith(".")
+            or not ext[1:].isascii()
+            or not ext[1:].isalnum()
+            for ext in self.extensions
+        ):
+            raise ValueError("invalid source extension")
         return self
 
 
