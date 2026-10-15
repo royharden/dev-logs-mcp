@@ -293,16 +293,10 @@ def test_mock_nonregular_handle_refused(configured, monkeypatch, mode):
     assert error.value.code == "NOT_REGULAR_FILE"
 
 
-@pytest.mark.parametrize("fs_type", ["nfs", "cifs", "fuse", "overlay"])
-def test_mock_network_or_unproven_mount_refused(monkeypatch, fs_type):
+@pytest.mark.parametrize("magic", [0x6969, 0xFF534D42, 0x65735546, 0x794C7630, 0, -1])
+def test_mock_network_or_unproven_mount_refused(monkeypatch, magic):
     """Regular files on remote, FUSE or unproven overlay storage cannot imply locality."""
-
-    def read_text(path):
-        if str(path).endswith("/123") or str(path).endswith("\\123"):
-            return "mnt_id: 5\n"
-        return f"5 0 1:1 / / rw - {fs_type} synthetic rw\n"
-
-    monkeypatch.setattr(safe.Path, "read_text", read_text)
+    monkeypatch.setattr(safe, "_linux_fs_magic", lambda fd: magic)
     with pytest.raises(safe.PathPolicyError) as error:
         safe._posix_local(123)
     assert error.value.code == "SOURCE_NOT_LOCAL"
@@ -311,10 +305,216 @@ def test_mock_network_or_unproven_mount_refused(monkeypatch, fs_type):
 
 def test_mock_missing_mount_proof_refused(monkeypatch):
     """Missing kernel mount metadata must fail closed rather than assume a local filesystem."""
-    monkeypatch.setattr(safe.Path, "read_text", lambda path: "")
+    monkeypatch.setattr(safe, "_linux_lp64", lambda: False)
     with pytest.raises(safe.PathPolicyError) as error:
         safe._posix_local(123)
     assert error.value.code == "SOURCE_NOT_LOCAL"
+
+
+def test_mock_unsupported_abi_has_no_native_call(monkeypatch):
+    """Unsupported native word/pointer layouts must fail before a libc metadata call."""
+    monkeypatch.setattr(safe, "sys", SimpleNamespace(platform="linux"))
+    monkeypatch.setattr(
+        safe,
+        "ctypes",
+        SimpleNamespace(
+            c_void_p=object(),
+            c_long=object(),
+            sizeof=lambda *a: 4,
+            CDLL=lambda *a, **kw: pytest.fail("unsupported native call"),
+        ),
+    )
+    assert not safe._linux_lp64()
+    with pytest.raises(safe.PathPolicyError):
+        safe._linux_fs_magic(123)
+
+
+@pytest.mark.parametrize("magic", [0xEF53, 0x58465342, 0x9123683E, 0x01021994, 0x858458F6])
+def test_mock_local_magic_has_no_proc_body_reads(monkeypatch, magic):
+    """Guard locality checks must not consume uncharged proc-file bodies of arbitrary size."""
+    monkeypatch.setattr(safe, "_linux_fs_magic", lambda fd: magic)
+    monkeypatch.setattr(safe.Path, "read_text", lambda *a, **kw: pytest.fail("proc body read"))
+    safe._posix_local(123)
+
+
+@pytest.mark.parametrize("outcome", ["ok", "errno", "missing", "load-error"])
+def test_mock_fstatfs_fixed_buffer_and_sanitized_errors(monkeypatch, outcome):
+    """Native fstatfs must use one fixed aligned metadata buffer and sanitize unavailable APIs."""
+    import ctypes
+
+    seen = []
+
+    class Function:
+        def __call__(self, fd, buffer):
+            seen.append((fd, ctypes.sizeof(buffer)))
+            buffer[0] = 0x01021994
+            return -1 if outcome == "errno" else 0
+
+    function = Function()
+
+    def load(*args, **kwargs):
+        assert args == (None,) and kwargs == {"use_errno": True}
+        if outcome == "load-error":
+            raise OSError("sensitive native failure")
+        return SimpleNamespace() if outcome == "missing" else SimpleNamespace(fstatfs=function)
+
+    monkeypatch.setattr(safe, "_linux_lp64", lambda: True)
+    # A fake Linux long width on Windows permits layout control without claiming
+    # that Windows actually supplies Linux libc or ABI.
+    monkeypatch.setattr(
+        safe,
+        "ctypes",
+        SimpleNamespace(
+            CDLL=load,
+            c_int=ctypes.c_int32,
+            c_long=ctypes.c_int64,
+            POINTER=ctypes.POINTER,
+        ),
+    )
+    if outcome == "ok":
+        assert safe._linux_fs_magic(123) == 0x01021994
+        assert seen == [(123, 512)]
+    else:
+        with pytest.raises(safe.PathPolicyError) as error:
+            safe._linux_fs_magic(123)
+        assert "sensitive" not in str(error.value)
+
+
+@pytest.fixture
+def mock_posix_open(monkeypatch):
+    """Provide fake descriptor-level ordering and ownership, never native safety proof."""
+    path = Path("/synthetic/source.log")
+    calls, closed = [], []
+    state = {
+        "magic": 0x01021994,
+        "mode": stat.S_IFREG,
+        "links": 1,
+        "swap": False,
+        "named_swap": False,
+        "final_swap": False,
+        "open_error": False,
+        "probe_close_error": False,
+    }
+
+    def info(fd=None, **kwargs):
+        return SimpleNamespace(
+            st_mode=state["mode"],
+            st_nlink=state["links"],
+            st_dev=1,
+            st_ino=9 if (fd == 13 and state["swap"]) or (fd == path and state["named_swap"]) else 2,
+            st_size=5,
+            st_mtime_ns=3,
+            st_ctime_ns=4,
+        )
+
+    def open_file(name, flags, **kwargs):
+        calls.append(("open", str(name), flags))
+        if str(name).startswith("/proc/self/fd/"):
+            if state["open_error"]:
+                raise OSError("sensitive open failure")
+            return 13
+        return {path.anchor: 10, "synthetic": 11, "source.log": 12}[str(name)]
+
+    def close(fd):
+        closed.append(fd)
+        if fd == 12 and state["probe_close_error"]:
+            raise OSError("sensitive close failure")
+
+    def magic(fd):
+        calls.append(("local", fd))
+        return state["magic"]
+
+    monkeypatch.setattr(safe, "_linux_lp64", lambda: True)
+    monkeypatch.setattr(safe, "_linux_fs_magic", magic)
+    monkeypatch.setattr(
+        safe,
+        "os",
+        SimpleNamespace(
+            O_PATH=0x200000,
+            O_DIRECTORY=0x10000,
+            O_CLOEXEC=0x80000,
+            O_NOFOLLOW=0x20000,
+            O_RDONLY=0,
+            O_NONBLOCK=0x800,
+            open=open_file,
+            close=close,
+            fstat=info,
+            stat=info,
+            readlink=lambda *a: "/elsewhere.log" if state["final_swap"] else str(path),
+        ),
+    )
+    return path, calls, closed, state
+
+
+def test_mock_locality_precedes_pinned_data_open(mock_posix_open):
+    """Never open rejected storage for data before its metadata-only locality validation."""
+    path, calls, closed, _ = mock_posix_open
+    assert safe._posix_open(path) == 13
+    assert calls[-2][0] == "local" and calls[-1][1] == "/proc/self/fd/12"
+    assert all(
+        call[2] & safe.os.O_PATH
+        for call in calls
+        if call[0] == "open" and not call[1].startswith("/proc/")
+    )
+    assert sorted(closed) == [10, 11, 12] and 13 not in closed
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "remote",
+        "symlink",
+        "links",
+        "named_swap",
+        "final_swap",
+        "open_error",
+        "swap",
+        "probe_close_error",
+    ],
+)
+def test_mock_rejected_probe_or_data_failure_closes_descriptors(mock_posix_open, change):
+    """Policy failures and reopen/identity/close failures must close every owned descriptor."""
+    path, calls, closed, state = mock_posix_open
+    state.update(
+        {
+            "remote": {"magic": 0x65735546},
+            "symlink": {"mode": stat.S_IFLNK},
+            "links": {"links": 2},
+        }.get(change, {change: True})
+    )
+    with pytest.raises((safe.PathPolicyError, OSError)):
+        safe._posix_open(path)
+    assert sorted(closed[:3]) == [10, 11, 12]
+    data_calls = [call for call in calls if call[0] == "open" and call[1].startswith("/proc/")]
+    if change in {"remote", "symlink", "links", "named_swap", "final_swap"}:
+        assert not data_calls and 13 not in closed
+    elif change != "open_error":
+        assert 13 in closed
+
+
+def test_mock_missing_O_PATH_never_opens(mock_posix_open, monkeypatch):
+    """Metadata-only opening unavailable means no source or ancestor open may occur."""
+    path, calls, closed, _ = mock_posix_open
+    monkeypatch.delattr(safe.os, "O_PATH")
+    with pytest.raises(safe.PathPolicyError):
+        safe._posix_open(path)
+    assert not calls and not closed
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX actual execution pending on Windows")
+def test_posix_real_fixed_metadata_guard(configured, monkeypatch):
+    """Real approved storage uses fixed fstatfs metadata; procfs is refused without body reads."""
+    policy, _ = configured
+    monkeypatch.setattr(safe.Path, "read_text", lambda *a, **kw: pytest.fail("proc body read"))
+    with policy.open_source("build") as handle:
+        assert handle.read(9) == b"synthetic"
+    descriptor = os.open("/proc/self/stat", os.O_PATH | os.O_CLOEXEC)
+    try:
+        with pytest.raises(safe.PathPolicyError) as error:
+            safe._posix_local(descriptor)
+        assert error.value.code == "SOURCE_NOT_LOCAL"
+    finally:
+        os.close(descriptor)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX actual execution pending on Windows")

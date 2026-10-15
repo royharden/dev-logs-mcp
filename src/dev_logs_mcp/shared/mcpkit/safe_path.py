@@ -6,9 +6,11 @@ available. Native metadata probes are diagnostic primitives, not that proof.
 
 from __future__ import annotations
 
+import ctypes
 import os
 import re
 import stat
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
@@ -68,6 +70,7 @@ def capabilities() -> dict[str, Any]:
     """Report implemented methods separately from actual observed OS execution."""
     windows = os.name == "nt"
     proc = os.name == "posix" and Path("/proc/self/fd").is_dir()
+    posix_ready = proc and _linux_lp64() and hasattr(os, "O_PATH") and hasattr(os, "O_NOFOLLOW")
     return {
         "platform": os.name,
         "methods": (
@@ -77,7 +80,7 @@ def capabilities() -> dict[str, Any]:
                 "GetFinalPathNameByHandleW",
             ]
             if windows
-            else ["openat-O_NOFOLLOW", "fstat", "proc-fd-final-path"]
+            else ["openat-O_PATH-O_NOFOLLOW", "fstat", "fstatfs", "proc-fd-final-path"]
         ),
         "windows_metadata_observed": _WINDOWS_OBSERVED if windows else False,
         "windows_no_recall_race_proven": False,
@@ -93,12 +96,12 @@ def capabilities() -> dict[str, Any]:
         }
         if windows
         else {},
-        "data_access_available": not windows and proc and hasattr(os, "O_NOFOLLOW"),
+        "data_access_available": not windows and posix_ready,
         "unsupported_required": (
             ["windows-no-recall-race", "windows-final-containment-authorization"]
             + ([] if _WINDOWS_OBSERVED else ["windows-metadata-change-time-unobserved"])
             if windows
-            else ([] if proc and hasattr(os, "O_NOFOLLOW") else ["opened-handle-final-path"])
+            else ([] if posix_ready else ["opened-handle-final-path"])
         ),
         "limitations": [
             "Metadata flag acceptance does not prove cloud recall race safety.",
@@ -200,44 +203,95 @@ class SafePathPolicy:
 
 
 def _posix_open(path: Path) -> int:
-    """Walk every ancestor with no-follow and pin each directory during descent."""
-    directory = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    """Authorize a pinned metadata-only object before opening it for data.
+
+    O_PATH avoids the data-capable open callback on rejected filesystems. The
+    deliberate proc-fd link reopen refers to the retained probe, not a fresh name
+    lookup. This does not promise preemptible kernel calls or provider behavior.
+    """
+    if not _linux_lp64() or not hasattr(os, "O_PATH"):
+        raise PathPolicyError("SOURCE_NOT_LOCAL", capability="linux-lp64-O_PATH")
+    probe = None
+    data = None
+    directory = os.open(path.anchor, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
     try:
-        for part in path.parts[1:-1]:
-            child = os.open(
-                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory
-            )
-            os.close(directory)
-            directory = child
-        return os.open(
-            path.name,
-            os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
-            dir_fd=directory,
-        )
-    finally:
-        os.close(directory)
+        try:
+            for part in path.parts[1:-1]:
+                child = os.open(
+                    part,
+                    os.O_PATH | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=directory,
+                )
+                previous, directory = directory, child
+                os.close(previous)
+            probe = os.open(path.name, os.O_PATH | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=directory)
+            info = os.fstat(probe)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise PathPolicyError("NOT_REGULAR_FILE")
+            _posix_local(probe)
+            if Path(os.readlink(f"/proc/self/fd/{probe}")) != path:
+                raise PathPolicyError("PATH_FORBIDDEN")
+            if _identity(os.stat(path, follow_symlinks=False)) != _identity(info):
+                raise PathPolicyError("SOURCE_CHANGED")
+            data = os.open(f"/proc/self/fd/{probe}", os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK)
+            if _identity(os.fstat(data)) != _identity(info):
+                raise PathPolicyError("SOURCE_CHANGED")
+        finally:
+            try:
+                if probe is not None:
+                    os.close(probe)
+            finally:
+                os.close(directory)
+    except BaseException:
+        if data is not None:
+            os.close(data)
+        raise
+    assert data is not None
+    return data
 
 
 def _identity(info: os.stat_result) -> FileIdentity:
     return FileIdentity(info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def _posix_local(fd: int) -> None:
-    """Accept only a small allowlist of Linux local filesystem types.
+def _linux_lp64() -> bool:
+    """The fixed statfs layout prefix is supported only by Linux LP64."""
+    return (
+        sys.platform == "linux"
+        and ctypes.sizeof(ctypes.c_void_p) == 8
+        and ctypes.sizeof(ctypes.c_long) == 8
+    )
 
-    In particular overlay, FUSE and network mounts do not imply local storage.
-    Kernel metadata reads are not source-data reads.
+
+def _linux_fs_magic(fd: int) -> int:
+    """Fixed 512-byte aligned metadata buffer; no proc-file body reads.
+
+    Linux LP64 statfs starts with long f_type (glibc bits/statfs.h). The known
+    struct is120 bytes; reserve512, read only its first word. No unsupported ABI
+    fallback. Kernel metadata calls remain synchronous and non-preemptible.
     """
+    if not _linux_lp64():
+        raise PathPolicyError("SOURCE_NOT_LOCAL", capability="linux-lp64-fstatfs")
     try:
-        fields = Path(f"/proc/self/fdinfo/{fd}").read_text().splitlines()
-        mount_id = next(line.split()[1] for line in fields if line.startswith("mnt_id:"))
-        mounts = Path("/proc/self/mountinfo").read_text().splitlines()
-        entry = next(line for line in mounts if line.split()[0] == mount_id)
-        fs_type = entry.split(" - ", 1)[1].split()[0]
-        if fs_type not in {"ext2", "ext3", "ext4", "xfs", "btrfs", "tmpfs", "ramfs"}:
+        function = ctypes.CDLL(None, use_errno=True).fstatfs
+        function.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_long)]
+        function.restype = ctypes.c_int
+        buffer = (ctypes.c_long * 64)()
+        if function(fd, buffer) != 0:
             raise PathPolicyError("SOURCE_NOT_LOCAL", capability="local-filesystem")
-    except (OSError, StopIteration, IndexError, ValueError):
+        return int(buffer[0])
+    except (OSError, AttributeError, TypeError, ValueError, OverflowError):
         raise PathPolicyError("SOURCE_NOT_LOCAL", capability="local-filesystem") from None
+
+
+def _posix_local(fd: int) -> None:
+    """Keep ext2/3/4, XFS, Btrfs, tmpfs and ramfs; reject every unknown magic.
+
+    Numeric identifiers are Linux UAPI magic.h constants. In particular overlay,
+    FUSE and network mounts do not imply locality. No metadata file bodies read.
+    """
+    if _linux_fs_magic(fd) not in {0xEF53, 0x58465342, 0x9123683E, 0x01021994, 0x858458F6}:
+        raise PathPolicyError("SOURCE_NOT_LOCAL", capability="local-filesystem")
 
 
 class AuthorizedReadHandle:
