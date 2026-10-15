@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "title": "Case Id",
+      "type": "string"
+    },
+    "what_bug_this_catches": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "What Bug This Catches",
+      "type": "string"
+    },
+    "tool": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "title": "Tool",
+      "type": "string"
+    },
+    "arguments": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Arguments",
+      "type": "object"
+    },
+    "expect_error": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expect Error"
+    },
+    "expect_protocol_error": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expect Protocol Error"
+    },
+    "platforms": {
+      "default": [
+        "nt",
+        "posix"
+      ],
+      "items": {
+        "enum": [
+          "nt",
+          "posix"
+        ],
+        "type": "string"
+      },
+      "title": "Platforms",
+      "type": "array"
+    },
+    "required_capability": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Required Capability"
+    },
+    "require_native": {
+      "default": false,
+      "title": "Require Native",
+      "type": "boolean"
+    },
+    "require_captured_wire": {
+      "default": false,
+      "title": "Require Captured Wire",
+      "type": "boolean"
+    },
+    "require_measured_reads": {
+      "default": false,
+      "title": "Require Measured Reads",
+      "type": "boolean"
+    },
+    "forbidden_literals": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 32,
+      "title": "Forbidden Literals",
+      "type": "array"
+    },
+    "max_frame_bytes": {
+      "default": 32768,
+      "maximum": 32768,
+      "minimum": 256,
+      "title": "Max Frame Bytes",
+      "type": "integer"
+    },
+    "max_read_bytes": {
+      "default": 8388608,
+      "maximum": 8388608,
+      "minimum": 1,
+      "title": "Max Read Bytes",
+      "type": "integer"
+    },
+    "timeout_seconds": {
+      "default": 5.0,
+      "exclusiveMinimum": 0,
+      "maximum": 5.0,
+      "title": "Timeout Seconds",
+      "type": "number"
+    }
+  },
+  "required": [
+    "case_id",
+    "what_bug_this_catches",
+    "tool"
+  ],
+  "title": "Case",
+  "type": "object"
+}
