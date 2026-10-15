@@ -1,4 +1,7 @@
-Original product implementation; no prior-art source code has been copied.
+The application-specific log pipeline is original; no researched prior-art code was copied.
+Canonical evalkit is vendored from receipt-field-review commit
+249262839c4247ff37cc5a75c6a89a422738c759 under the MIT License, copyright2026 Roy Harden.
+Its retained license and provenance are in src/dev_logs_mcp/shared/evalkit/.
 MCP Python SDK is an external MIT dependency. Google RE2 is an external
 dependency with BSD-style licensing; retain its installed distribution notices.
 The lockfile identifies dependency distributions, not vendored application modules.
