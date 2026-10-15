@@ -97,15 +97,21 @@ def parse_line(
             record = json.loads(text)
             if not isinstance(record, dict):
                 raise ValueError
-            raw_stamp = _first(record, ("timestamp", "time", "ts", "@timestamp"))
-            if raw_stamp is not None:
-                timestamp = normalize_time(raw_stamp, zone)
+            # Establish the record boundary before parsing either metadata field:
+            # an invalid timestamp cannot turn a new event into a prior trace.
+            header = True
             raw_level = _first(record, ("level", "severity", "log_level"))
             level = _level(raw_level)
-            # A JSON object is its own record, never an inherited stack frame.
-            header = True
-            fallback = (timestamp is None and level is None) or (
-                raw_level is not None and level is None
+            raw_stamp = _first(record, ("timestamp", "time", "ts", "@timestamp"))
+            if raw_stamp is not None:
+                try:
+                    timestamp = normalize_time(raw_stamp, zone)
+                except ValueError:
+                    fallback = True
+            fallback = (
+                fallback
+                or (timestamp is None and level is None)
+                or (raw_level is not None and level is None)
             )
         except (ValueError, TypeError, RecursionError, OverflowError):
             fallback = True

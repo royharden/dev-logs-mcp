@@ -76,6 +76,20 @@ def test_json_object_does_not_inherit_previous_error():
     assert result.fallback and not result.level_inherited
 
 
+@pytest.mark.parametrize("timestamp", ['"invalid"', '"2026-02-31T00:00:00Z"', "123", "true", '""'])
+@pytest.mark.parametrize("format", ["auto", "jsonl"])
+def test_invalid_json_timestamp_cannot_inherit_prior_record(timestamp, format):
+    """what_bug_this_catches: an invalid JSON date cannot inherit a prior ERROR trace."""
+    raw = f'{{"timestamp":{timestamp},"level":"WARN","msg":"synthetic event"}}'
+    result = parse_line(raw, ParseState("2026-01-01T00:00:00Z", "ERROR"), format=format)
+    assert result.state == ParseState(None, "WARN")
+    assert result.fallback and not result.timestamp_inherited and not result.level_inherited
+    assert result.text == raw
+    following = parse_line("  synthetic continuation", result.state)
+    assert following.state == ParseState(None, "WARN")
+    assert not following.timestamp_inherited and following.level_inherited
+
+
 def test_metadata_cannot_echo_arbitrary_json_fields():
     raw = '{"timestamp":"private-marker","level":"private-marker"}'
     result = parse_line(raw)
