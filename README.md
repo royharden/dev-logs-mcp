@@ -50,6 +50,9 @@ establish native log access. The latest full Windows run has three metadata stab
 failures, seven pending POSIX checks, and an unavailable required symlink fixture.
 The planned evaluation uses independently frozen, disjoint synthetic dev/heldout families
 and grep/naive-range baselines. No remote CI or finished-app acceptance is claimed.
+The incident scorer uses canonical evalkit records and controller-recorded response
+references. Its toy controls cover evidence binding and fixed-denominator accounting;
+corpus enrichment, actual campaign execution and controller provenance remain pending.
 
 ## Cost
 
