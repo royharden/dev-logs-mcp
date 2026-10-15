@@ -44,6 +44,13 @@ Existing proposals and metadata observations do not establish successful executi
 - Linux attempts ended before pytest produced a verdict. One timed out during
   startup; another rejected dependency contents. A read-only image/volume/port
   readiness observation completed, but it executed no application or native tests.
+- The latest fresh Linux safety attempt stopped before container creation because
+  the agent-ports check exceeded its command bound. No cache audit or POSIX test ran.
+  Its own unused reservation was released after both exact container names were
+  observed absent; the predecessor's retained cache remains untouched.
+- Default pytest collection now includes the reusable mcpkit suite alongside the
+  application suite. Collection coverage is separate from execution; known native
+  failures remain required failures when those tests run.
 - Application model calls are zero. No actual diagnosis-quality, 100 MB latency,
   offline-scanner, clean-wheel, remote-CI or finished-app acceptance result exists.
 
@@ -77,8 +84,8 @@ Existing proposals and metadata observations do not establish successful executi
    security scan; synthetic transport faults are not those application mutations.
 6. Run the specified 100,000,000-byte plain/JSONL benchmarks with actual read, output,
    memory and latency observations. No performance values should be inferred from units.
-7. Verify wheel installation, full detached consumption and CI. Ensure standard test
-   collection includes the shared-core suite; the current default test path is `tests`.
+7. Verify wheel installation, full detached consumption and CI. Standard test
+   collection includes the shared-core suite; its native execution gates remain open.
 8. Complete independent finished-app review and explicit release/platform dispositions.
    Publishing, remote creation/push, deployment and user client changes remain unperformed.
 
