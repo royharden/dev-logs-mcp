@@ -5,7 +5,7 @@ A local stdio MCP server for bounded, redacted development-log inspection. It im
 The implementation is under validation. Windows data access fails closed; Linux native
 verification, evaluation, security scanning, packaging, and independent review remain pending.
 
-Development is paused as of 2026-10-15. [Development status](DEVELOPMENT-STATUS.md)
+Local development resumed on 2026-10-15. [Development status](DEVELOPMENT-STATUS.md)
 records completed work, work in progress and outstanding gates; [lessons](LESSONS.md)
 records implementation and verification lessons. This is a local prototype under validation.
 
@@ -17,11 +17,19 @@ Python 3.12 and uv are required. From this repository:
 uv sync --frozen
 uv run dev-logs-mcp check-config fixtures/bootstrap.toml
 uv run dev-logs-mcp export-tools --check tools.json
+uv run python scripts/demo.py --mode mock
 uv run pytest tests src/dev_logs_mcp/shared/mcpkit/tests
 ```
 
 `check-config` checks TOML shape without opening configured log paths. The example paths
 need not exist. Tool export also opens no log sources. No provider key is needed.
+The demo generates temporary synthetic plain/JSONL logs and launches the actual CLI
+server over stdio. It calls every tool and checks incident coordinates, stable
+redaction, bounded responses, append refresh and unknown/outside-root refusals.
+`mock` selects synthetic inputs; the catalog, filesystem policy and transport are real.
+Windows currently reports `unsupported_required` and exits 3 because data reads
+remain closed. This is a required normal-journey failure, even when the refusal
+regression test passes. Linux normal execution remains unverified.
 
 ## Example
 
@@ -35,7 +43,8 @@ uv run dev-logs-mcp serve /absolute/path/to/sources.toml
 
 Connect an MCP stdio client to that command. Files above 6 MiB require a stable explicit
 preflight using `index-source <config> <source_id> --cache-dir <private-cache-directory>`;
-pass the same cache directory to `serve`. The seeded diagnosis demo is still pending.
+pass the same cache directory to `serve`. Use the seeded demo command above for
+generated inputs; its platform failures are retained in the JSON report.
 Do not use personal or customer logs for development tests.
 
 ## Architecture

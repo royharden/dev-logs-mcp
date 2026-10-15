@@ -1,8 +1,8 @@
 # Development status — 2026-10-15
 
-**Paused. Local prototype under validation; no finished-app or release acceptance.**
-Resume development only after the owner explicitly resumes it. Existing proposals,
-cached dependencies and metadata observations do not authorize pending test runs.
+**Local development resumed. Prototype under validation; no release acceptance.**
+Native safety, dependency, evaluation and independent review gates remain open.
+Existing proposals and metadata observations do not establish successful execution.
 
 ## Finished implementation
 
@@ -21,11 +21,19 @@ cached dependencies and metadata observations do not authorize pending test runs
   redacted search plus range, and naive paged range. These have toy controls only.
 - Local-runtime/Bolt inspection handoff and template/description documentation.
   This application has no frontend, database, migrations or cloud services to provision.
+- `scripts/demo.py --mode mock` generates plain/JSONL inputs and launches the actual
+  CLI server, with all five tools, coordinate/redaction/bounds/append checks and
+  unknown-source/outside-root refusals. Unsupported native access stays a failure.
 
 ## Verification completed, with scope limits
 
 - Official SDK stdio controls exercised all five tools over a synthetic test catalog,
   including concurrency. This does not prove native log-file access.
+- The configured-source demo ran on Windows: listing and both refusal checks worked;
+  all eight plain/JSONL data calls returned `SOURCE_NOT_LOCAL` with zero source bytes.
+  Its exit was 3 (`unsupported_required`), not normal-journey success. The new refusal
+  regression and seven existing frame-guard checks passed. An initial demo validation
+  error was fixed by validating strict transport enums in JSON mode; its failure is retained.
 - The latest method/scorer toy set passed 54 checks. A separate detached pure-core
   and synthetic conformance set passed 148 checks with owner-app and MCP SDK imports
   blocked; three application compatibility checks passed separately. These sets
@@ -60,8 +68,9 @@ cached dependencies and metadata observations do not authorize pending test runs
    guarantees before enabling data reads. No Linux-only acceptance exception is adopted.
 2. Execute the five required POSIX path cases, native cache/catalog and full app checks
    under a fresh authorized resource allocation. Audit actual retained dependencies first.
-3. Finish a runnable seeded normal/refusal stdio demo, including redaction and tail
-   refresh. The planned `scripts/demo.py` workflow is not implemented yet.
+3. Execute the implemented seeded demo successfully on a qualified Linux filesystem,
+   including redaction and tail refresh. The retained Linux safety dependency list
+   lacks MCP/RE2, so that cache alone cannot run the full configured-source workflow.
 4. Complete controller metadata and freeze actual methods/configuration before any
    authorized development or held-out campaign. Preserve all misses/errors/abstentions.
 5. Complete actual application-guard sabotage controls and the mandatory offline

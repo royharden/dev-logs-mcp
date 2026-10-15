@@ -1,5 +1,10 @@
 # Lessons learned
 
+- Validate strict structured transport models in JSON mode when enum values arrive
+  as strings. Python-object validation can reject a valid wire response. Preserve
+  the failing attempt and test error envelopes as well as successful payloads.
+- A demo must return a required-failure status when native reads are unavailable.
+  A passing test of the refusal is separate from successful normal use.
 - Define dependency inventory boundaries before hashing. A payload hash captured
   before writing an installer receipt does not describe the final directory. Verify
   the exact receipt separately; never ignore arbitrary or nested metadata files.

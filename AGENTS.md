@@ -1,4 +1,4 @@
-# Product instructions — version 1
+# Product instructions — version 2
 
 This inner directory is the product Git root. The parent shell owns agent plans,
 receipts, registries, private research and chat exports. Keep all of those outside
@@ -7,12 +7,14 @@ Do not initialize another registry or copy credentials here.
 
 Commands: `uv sync --frozen`, `uv run ruff check .`, `uv run ruff format --check .`,
 `uv run pytest`, `uv run dev-logs-mcp check-config fixtures/bootstrap.toml`.
+Seeded configured-source workflow: `uv run python scripts/demo.py --mode mock`.
 The runtime is Python 3.12. Keep the committed uv lock consistent.
 
-Current state: W01 contracts/configuration bootstrap only. No log-reading MCP server,
-path authorization, redactor, pagination, conformance suite or evaluation is complete.
-Never describe schema validation as filesystem authorization or a full-frame bound.
-Later implementation must enforce the approved caps on actual reads/wire output.
+Current state: five-tool stdio prototype with configuration, authorization, redaction,
+generation indexes and bounded queries; validation and evaluation remain incomplete.
+Windows data/no-recall access stays closed. The seeded demo uses actual native paths
+and exits 3 for unsupported-required access; a passing refusal test is not normal-use
+or platform qualification. Never describe schema validation as filesystem authorization.
 
 Five tools only: list_sources, tail, search, read_range, errors. Sources come from
 explicit configuration, never request paths. Read-only logs, redaction before search,
@@ -31,3 +33,6 @@ One owner changes shared schemas/config/lock/integration. Consumer contracts and
 vendored commits require actual owning-app coordination and provenance.
 
 Change log: version 1 establishes W01 commands, scope and outer-shell boundary.
+Version 2 corrects the obsolete bootstrap status and adds the native demo command
+and honest failure semantics. CLAUDE/Cursor/Grok continue to use this file; no skill
+mirrors or operational material are added to the product repo.

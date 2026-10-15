@@ -15,6 +15,7 @@ Local commands, after installing the pinned environment:
 uv sync --frozen
 uv run dev-logs-mcp check-config fixtures/bootstrap.toml
 uv run dev-logs-mcp export-tools --check tools.json
+uv run python scripts/demo.py --mode mock
 uv run dev-logs-mcp serve /absolute/path/to/sources.toml
 ```
 
@@ -22,6 +23,10 @@ The first two CLI operations inspect configuration/schema only. Serving data rem
 subject to the platform and filesystem guarantees in docs/LIMITATIONS.md. A clean wheel
 and local `uvx --from <wheel-or-project-path>` invocation still need verification;
 no public PyPI package invocation is promised.
+The seeded demo uses real configured-source stdio with generated inputs, and reports
+required native failures with a nonzero exit. Windows currently exits 3 with
+`unsupported_required`; Linux normal execution remains pending. Passing refusal
+regressions does not qualify the operating system or establish release readiness.
 
 Inspection prompt for a future Bolt import:
 
