@@ -5,6 +5,10 @@ A local stdio MCP server for bounded, redacted development-log inspection. It im
 The implementation is under validation. Windows data access fails closed; Linux native
 verification, evaluation, security scanning, packaging, and independent review remain pending.
 
+Development is paused as of 2026-10-15. [Development status](DEVELOPMENT-STATUS.md)
+records completed work, work in progress and outstanding gates; [lessons](LESSONS.md)
+records implementation and verification lessons. This is a local prototype under validation.
+
 ## Keyless quickstart
 
 Python 3.12 and uv are required. From this repository:

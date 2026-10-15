@@ -8,10 +8,16 @@
   reopening, and identity/containment checks. Native verification of this successor is
   pending. Unsupported ABI, missing guarantees, FUSE, overlay, and network storage fail closed.
 - The earlier Linux test attempt timed out during container start and yielded no test
-  verdict. Dependency setup success does not establish product runtime support.
+  verdict. A later attempt rejected the retained dependency tree before pytest: the
+  installer had hashed payload files before adding its receipt, while the verifier
+  included that receipt. A receipt-aware successor is prepared but has not run;
+  other actual volume changes have not been ruled out. Dependency setup or metadata
+  readiness does not establish product runtime support.
 - Five SafePath and two cache/catalog native POSIX checks remain pending on the Windows
   development host. Independent conformance, sabotage controls, offline scanner,
-  heldout evaluation, clean-wheel and detached-kit checks remain required later gates.
+  heldout evaluation, clean-wheel and full detached-runtime checks remain required gates.
+  A detached pure-core/synthetic-conformance subset passed with the owner app and MCP
+  SDK imports blocked, using existing dependencies. It did not execute native path tests.
 - Large files above 6 MiB require a stable explicit index. Any change invalidates the
   generation and cursors. Continuously changing large logs may be unavailable throughout
   the writer lifetime. Small files can auto-index within the per-call budget.
@@ -33,3 +39,6 @@
 - No model calls, command-execution tool, URL fetching, dynamic roots expansion, log writing,
   browser runtime, public package publication, remote CI run, GitHub push, client configuration
   changes, or hosted deployment are established by this local implementation.
+
+Development is paused. See [development status](../DEVELOPMENT-STATUS.md) for the
+remaining demo, controller, security, performance and release work.
