@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "dev-logs-mcp"
 version = "0.1.0"
-description = "Bounded read-only local development log tools; initial contract bootstrap"
+description = "Bounded read-only local development log tools with redacted MCP stdio responses"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = "MIT"
