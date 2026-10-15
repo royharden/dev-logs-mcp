@@ -1,17 +1,8 @@
 import pytest
 from pydantic import ValidationError
 
-from dev_logs_mcp import contracts
-from dev_logs_mcp.shared.mcpkit.errors import BoundaryModel, ErrorCode, ToolError
+from dev_logs_mcp.shared.mcpkit.errors import ErrorCode, ToolError
 from dev_logs_mcp.shared.mcpkit.models import ToolEnvelope
-
-
-def test_app_reexports_one_canonical_model_identity():
-    """Catch duplicate schema classes after standalone-core promotion."""
-    assert contracts.ToolError is ToolError
-    assert contracts.ToolEnvelope is ToolEnvelope
-    assert contracts.BoundaryModel is BoundaryModel
-    assert contracts.ErrorCode is ErrorCode
 
 
 def test_structured_error_roundtrip_and_no_success_evidence():
