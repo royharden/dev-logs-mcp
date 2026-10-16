@@ -268,6 +268,10 @@ async def run_pinned_scan(raw: bytes, directory: Path) -> dict[str, object]:
     report.update(
         input_sha256=hashlib.sha256(raw).hexdigest(),
         scanner_version=SCANNER_VERSION,
+        vendor_origins={
+            name: str(getattr(sys.modules.get(name), "__file__", "unloaded"))
+            for name in ("mcpscanner", "yara", "litellm")
+        },
         controls={
             "positive_finding_counts": positives,
             "caught_analyzer_errors_detected": True,
