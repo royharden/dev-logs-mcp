@@ -6,6 +6,7 @@ Memory/clock fixtures are not native filesystem, wire or hard-preemption proof.
 import asyncio
 import json
 from dataclasses import replace
+from time import perf_counter
 
 import pytest
 from pydantic import ValidationError
@@ -254,6 +255,133 @@ def test_line_limited_wire_boundary_does_not_admit_page_by_shortening_flags():
     assert len(accepted.wire_bytes) == exact and len(accepted.envelope.lines) == 1
     refused = OutputBudget(max_lines=1, max_wire_bytes=exact - 1).render(original, "r", shrink)
     assert len(refused.wire_bytes) <= exact - 1 and not refused.envelope.lines
+
+
+@pytest.mark.parametrize("wire_cap", [8192, 6144])
+@pytest.mark.parametrize("occurrences", [2, 5, 99])
+def test_grouped_errors_preserve_larger_complete_prefix_and_exact_cursor(wire_cap, occurrences):
+    """what_bug_this_catches: coalesced groups hid a fitting larger raw-evidence prefix."""
+    secret = b"grouped_synthetic_secret"
+    alpha = b"2026-01-01T00:00:00Z ERROR alpha password=" + secret + b"\n"
+    data = (
+        b"2026-01-01T00:00:00Z ERROR bravo "
+        + b"B" * 6000
+        + b"\n"
+        + alpha * occurrences
+        + b"  "
+        + b"T" * 4000
+        + b"\n"
+    )
+    subject = configured(data, lines=occurrences + 2, frame_bytes=8192)
+    query = subject.call("errors", {"source_id": "web"})
+    original = query.envelope.model_dump()
+    opened = subject.catalog.opened
+    calls = []
+
+    def counted(limit):
+        calls.append(limit)
+        return query.shrink(limit)
+
+    rendered = replace(query, shrink=counted).render(
+        1, OutputBudget(max_lines=occurrences + 2, max_wire_bytes=wire_cap)
+    )
+    page = rendered.envelope
+    assert page.ok and len(rendered.wire_bytes) <= wire_cap
+    assert secret not in rendered.wire_bytes and len(page.groups) == 1
+    group = page.groups[0]
+    assert group.first_in_coverage.line_no == 2
+    assert group.occurrence_count_in_coverage == occurrences and not group.trace
+    assert page.next_cursor and page.truncation.output_bytes
+    assert query.envelope.model_dump() == original and subject.catalog.opened == opened
+    assert len(calls) <= 99
+    # Every proper prefix is declared in traversal order, including collapsed ones.
+    assert query.prefix_limits == tuple(range(occurrences + 1, 1, -1))
+    resumed = subject.call("errors", {"source_id": "web", "cursor": page.next_cursor}).envelope
+    assert resumed.ok and len(resumed.groups) == 1 and resumed.next_cursor is None
+    assert resumed.groups[0].first_in_coverage.line_no == 1
+    assert resumed.groups[0].occurrence_count_in_coverage == 1
+
+
+def test_errors_worst_case99_prefixes_preserve_deadline_and_do_not_reopen_source(record_property):
+    """what_bug_this_catches: actual errors must bound all99 expensive nonfitting prefixes."""
+    data = b"".join(
+        (
+            "2026-01-01T00:00:00Z ERROR issue "
+            + chr(65 + n // 26)
+            + chr(65 + n % 26)
+            + " "
+            + "X" * 2000
+            + "\n"
+        ).encode()
+        for n in range(100)
+    )
+    subject = configured(data, lines=100, frame_bytes=8192)
+    query = subject.call("errors", {"source_id": "web"})
+    assert query.envelope.ok and query.prefix_limits == tuple(range(99, 0, -1))
+    opened = subject.catalog.opened
+    calls = []
+
+    def counted(limit):
+        calls.append(limit)
+        return query.shrink(limit)
+
+    started = perf_counter()
+    rendered = replace(query, shrink=counted).render(1)
+    elapsed = perf_counter() - started
+    record_property("prefix_scan_seconds", elapsed)
+    record_property("declared_callback_attempts", len(calls))
+    record_property("captured_bytes_read", rendered.envelope.coverage.bytes_read)
+    assert rendered.envelope.ok and len(rendered.envelope.groups) == 1
+    assert len(rendered.wire_bytes) <= 8192 and calls == list(range(99, 0, -1))
+    assert elapsed < 5.0 and subject.catalog.opened == opened
+    assert rendered.envelope.next_cursor and query.render_budget.deadline < perf_counter() + 5.0
+
+
+def test_grouped_error_rendering_uses_original_deadline_before_and_after_wire(monkeypatch):
+    """what_bug_this_catches: rendering captured prefixes cannot renew or outlive the call."""
+    clock = [0.0]
+    subject = configured(b"2026-01-01T00:00:00Z ERROR small\n")
+    read_budget = ReadBudget(clock=lambda: clock[0])
+    query = subject.call("errors", {"source_id": "web"}, budget=read_budget)
+    budget = OutputBudget()
+    original_wire = OutputBudget._wire
+
+    def slow_wire(selected, result, request_id):
+        wire = original_wire(selected, result, request_id)
+        clock[0] = 6.0
+        return wire
+
+    monkeypatch.setattr(OutputBudget, "_wire", slow_wire)
+    result = query.render(1, budget).envelope
+    assert not result.ok and result.error.code.value == "LIMIT_EXCEEDED"
+    assert not result.groups
+    # The same captured query also refuses before another serialization attempt.
+    assert not query.render(1).envelope.ok
+
+
+def test_grouped_error_prefix_expiry_stops_callbacks_without_partial_evidence():
+    """what_bug_this_catches: expiry inside prefix assembly must stop and discard evidence."""
+    clock = [0.0]
+    budget = ReadBudget(clock=lambda: clock[0])
+    subject = configured(
+        b"2026-01-01T00:00:00Z ERROR bravo " + b"B" * 6000 + b"\n"
+        b"2026-01-01T00:00:00Z ERROR alpha\n"
+        b"2026-01-01T00:00:00Z ERROR alpha\n  " + b"T" * 4000 + b"\n",
+        lines=4,
+        frame_bytes=8192,
+    )
+    query = subject.call("errors", {"source_id": "web"}, budget=budget)
+    opened = subject.catalog.opened
+    calls = []
+
+    def expired(limit):
+        calls.append(limit)
+        clock[0] = 6.0
+        return query.shrink(limit)
+
+    result = replace(query, shrink=expired).render(1).envelope
+    assert calls == [3] and not result.ok and result.error.code.value == "LIMIT_EXCEEDED"
+    assert not result.groups and not result.next_cursor and subject.catalog.opened == opened
 
 
 def test_passed_deadline_is_clamped_to_original_start_not_reset():

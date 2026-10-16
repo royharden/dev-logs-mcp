@@ -104,6 +104,8 @@ class QueryResult:
     envelope: ToolEnvelope
     shrink: Callable[[int], ToolEnvelope] | None = None
     limits: ToolLimits | None = None
+    prefix_limits: tuple[int, ...] | None = None
+    render_budget: ReadBudget | None = None
 
     def render(self, request_id: int | str, budget: OutputBudget | None = None) -> RenderedResponse:
         selected = budget or OutputBudget()
@@ -112,7 +114,17 @@ class QueryResult:
                 max_lines=min(selected.max_lines, self.limits.lines),
                 max_wire_bytes=min(selected.max_wire_bytes, self.limits.frame_bytes),
             )
-        return selected.render(self.envelope, request_id, self.shrink)
+        try:
+            if self.render_budget is not None:
+                self.render_budget.check()
+            rendered = selected.render(
+                self.envelope, request_id, self.shrink, prefix_limits=self.prefix_limits
+            )
+            if self.render_budget is not None:
+                self.render_budget.check()
+            return rendered
+        except ReadFailure:
+            return selected.render(_failure("LIMIT_EXCEEDED", self.render_budget), request_id)
 
 
 @dataclass(frozen=True)
@@ -537,6 +549,8 @@ class LogEngine:
         envelope = assemble(units, next_line)
 
         def shrink(limit):
+            if matcher is None:
+                budget.check()
             selected = []
             numbers = set()
             for unit in units:
@@ -552,6 +566,26 @@ class LogEngine:
                 if len(selected) < len(units)
                 else next_line
             )
-            return assemble(selected, resume, shortened=len(selected) < len(units))
+            candidate = assemble(selected, resume, shortened=len(selected) < len(units))
+            if matcher is None:
+                budget.check()
+            return candidate
 
-        return QueryResult(envelope, shrink)
+        # Errors capture at most100 occurrences and500 physical rows. Grouping
+        # can replace a long representative/trace when an earlier occurrence
+        # joins the prefix, so emitted group count/bytes are not monotonic.
+        # Declare every proper prefix of the captured, already sanitized units.
+        prefixes = None
+        if matcher is None:
+            numbers = set()
+            allowances = []
+            for unit in units[:-1]:
+                numbers.update(item.line.line_no for item in unit.evidence)
+                allowances.append(len(numbers))
+            prefixes = tuple(reversed(allowances))
+        return QueryResult(
+            envelope,
+            shrink,
+            prefix_limits=prefixes,
+            render_budget=budget if matcher is None else None,
+        )

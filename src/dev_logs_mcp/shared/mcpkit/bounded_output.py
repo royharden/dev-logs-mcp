@@ -15,6 +15,7 @@ from .models import ToolEnvelope
 
 MAX_SAFE_REQUEST_ID = 2**53 - 1
 MAX_REQUEST_ID_BYTES = 256
+MAX_ERROR_PREFIXES = 99
 
 
 class ProtocolBudgetError(ValueError):
@@ -121,8 +122,10 @@ class OutputBudget:
         result: ToolEnvelope,
         request_id: int | str,
         shrink: Callable[[int], ToolEnvelope] | None = None,
+        *,
+        prefix_limits: tuple[int, ...] | None = None,
     ) -> RenderedResponse:
-        """Try complete prefixes with at most eleven pure-callback probes.
+        """Use eleven generic probes or up to99 declared grouped-error prefixes.
 
         A callback LIMIT_EXCEEDED with no units signals that its line allowance
         cannot hold one whole unit. Renderable prefixes still need a cursor or
@@ -140,7 +143,7 @@ class OutputBudget:
         byte_overflow = not line_overflow
         callback_failed = False
         if shrink is not None:
-            # Fixed probe bound for the approved 500-unit ceiling.
+            # Generic monotonic callers retain their eleven-probe ceiling.
             original_units = _units(result)
             maximum = min(self.max_lines, max(1, original_units))
             # The original full-unit result already failed its wire check. If
@@ -149,7 +152,23 @@ class OutputBudget:
             limit = maximum if maximum < original_units else maximum // 2
             lower = 0
             upper = maximum if maximum < original_units else maximum - 1
-            for _attempt in range(11):
+            declared = prefix_limits is not None
+            valid_limits = not declared or (
+                type(prefix_limits) is tuple
+                and len(prefix_limits) <= MAX_ERROR_PREFIXES
+                and all(type(value) is int and 1 <= value <= MAX_LINES for value in prefix_limits)
+                and all(
+                    left > right
+                    for left, right in zip(prefix_limits, prefix_limits[1:], strict=False)
+                )
+            )
+            remaining = iter(prefix_limits) if declared and valid_limits else iter(())
+            if declared:
+                limit = next(remaining, None)
+            callback_failed = not valid_limits
+            for _attempt in range(MAX_ERROR_PREFIXES if declared else 11):
+                if callback_failed or limit is None:
+                    break
                 try:
                     candidate = shrink(limit)
                     if not isinstance(candidate, ToolEnvelope):
@@ -180,6 +199,11 @@ class OutputBudget:
                     break
                 if wire is not None:
                     return RenderedResponse(candidate, wire, _units(candidate), True)
+                if declared:
+                    # Group representatives/trace can shrink as coverage grows.
+                    # Every declared proper prefix must remain eligible.
+                    limit = next(remaining, None)
+                    continue
                 # No complete unit fits below this limit, whereas a nonempty
                 # oversized page needs fewer units. Refine between those bounds
                 # instead of jumping over a fitting atomic context unit.

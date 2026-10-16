@@ -1,4 +1,5 @@
 import json
+from time import perf_counter
 
 import pytest
 from pydantic import ValidationError
@@ -6,6 +7,65 @@ from pydantic import ValidationError
 from dev_logs_mcp.shared.mcpkit.bounded_output import OutputBudget, ProtocolBudgetError
 from dev_logs_mcp.shared.mcpkit.errors import ErrorCode
 from dev_logs_mcp.shared.mcpkit.models import Coverage, ErrorGroup, LogLine, ToolEnvelope
+
+
+@pytest.mark.parametrize(
+    "limits",
+    [[3, 2], (True,), (0,), (501,), (2, 3), (3, 3), tuple(range(100, 0, -1)), (1.0,)],
+)
+def test_declared_prefix_domain_must_be_typed_descending_unique_and_bounded(limits):
+    """what_bug_this_catches: malformed domains must refuse before trusted callbacks run."""
+    original = evidence([LogLine(line_no=1, byte_offset=0, text="x" * 10000)])
+    calls = []
+    result = OutputBudget(max_wire_bytes=8192).render(
+        original, 1, lambda limit: calls.append(limit), prefix_limits=limits
+    )
+    assert not result.envelope.ok and result.envelope.error.code == ErrorCode.INTERNAL_ERROR
+    assert calls == []
+
+
+def test_declared_nonmonotonic_prefixes_check_all99_and_keep_generic11(record_property):
+    """what_bug_this_catches: the new path is finite and cannot alter generic probe bounds."""
+    original = evidence([LogLine(line_no=1, byte_offset=0, text="x" * 10000)])
+    candidate = original.model_copy(update={"hint": "narrow the query"})
+    calls = []
+
+    def shrink(limit):
+        calls.append(limit)
+        return candidate
+
+    started = perf_counter()
+    rendered = OutputBudget(max_wire_bytes=8192).render(
+        original, 1, shrink, prefix_limits=tuple(range(99, 0, -1))
+    )
+    elapsed = perf_counter() - started
+    record_property("prefix_scan_seconds", elapsed)
+    record_property("declared_callback_attempts", len(calls))
+    assert not rendered.envelope.ok and rendered.envelope.error.code == ErrorCode.LIMIT_EXCEEDED
+    assert calls == list(range(99, 0, -1)) and elapsed < 5.0
+    calls.clear()
+    OutputBudget(max_wire_bytes=8192).render(original, 1, shrink)
+    assert len(calls) <= 11
+
+
+@pytest.mark.parametrize("fault", ["type", "units", "hint"])
+def test_declared_prefixes_retain_callback_contract_checks(fault):
+    """what_bug_this_catches: prefix enumeration cannot bypass types, units or continuation."""
+    original = evidence([LogLine(line_no=1, byte_offset=0, text="x" * 10000)])
+    candidate = {
+        "type": "untrusted",
+        "units": original.model_copy(
+            update={
+                "lines": [LogLine(line_no=n, byte_offset=n, text="x") for n in (1, 2)],
+                "hint": "continue",
+            }
+        ),
+        "hint": evidence([LogLine(line_no=1, byte_offset=0, text="x")]),
+    }[fault]
+    result = OutputBudget(max_wire_bytes=8192).render(
+        original, 1, lambda _: candidate, prefix_limits=(1,)
+    )
+    assert not result.envelope.ok and result.envelope.error.code == ErrorCode.INTERNAL_ERROR
 
 
 def evidence(lines):
