@@ -2,8 +2,15 @@
 
 - Windows data authorization is unavailable. Metadata-only native probes do not prove
   safe data opening or cloud no-recall behavior. The server refuses data requests before
-  source metadata/data I/O on Windows. Three native metadata stability checks have failed;
-  the required symlink fixture also lacks privilege. These are open capabilities, not passes.
+  source metadata/data I/O on Windows. Earlier native metadata stability checks failed;
+  those results are preserved separately from the current policy. Metadata-only proofs
+  retain canonical identity, path and object-state checks on every pinned ancestor.
+  Size and write/change timestamps are guarded on the configured root and descendants;
+  unrelated sibling changes above that boundary do not invalidate the proof. The boundary
+  uses retained canonical components and native case/volume semantics, not path prefixes.
+  This refinement does not establish data authorization, cloud no-recall safety or full
+  Windows qualification. Earlier unavailable symlink fixtures remain part of their own
+  historical execution limits.
 - Linux uses no-follow O_PATH probes, a fixed-buffer LP64 fstatfs allowlist, pinned data
   reopening, and identity/containment checks. Five native SafePath and two catalog/cache
   cases passed on CPython3.12.13/glibc2.36/x86-64, alongside the real configured-source

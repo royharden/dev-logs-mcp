@@ -677,6 +677,7 @@ class _WindowsMetadataProof:
         self.__canonical_units = 0
         try:
             root_info = self._retain(root, directory=True)
+            self.__root_final_path = root_info.final_path
             previous = None
             chain = list(reversed(path.parents)) + [path]
             for index, part in enumerate(chain):
@@ -733,7 +734,17 @@ class _WindowsMetadataProof:
                 self.__budget.check()
                 after = self.__native.snapshot(handle)
                 _windows_validate(after, directory=directory)
-                for field in ("volume_id", "file_id", "size_bytes", "mtime_ns", "change_time_ns"):
+                fields = ("volume_id", "file_id")
+                # The retained root's identity/path is reconciled with traversal
+                # during acquisition. Compare canonical components with native
+                # ordinal semantics, never a lexical path-string prefix. Shared
+                # ancestors may acquire unrelated siblings while handles remain
+                # pinned; all their structural checks below still apply.
+                if _windows_under(
+                    self.__native, before.final_path, self.__root_final_path, strict=False
+                ):
+                    fields += ("size_bytes", "mtime_ns", "change_time_ns")
+                for field in fields:
                     if getattr(before.identity, field) != getattr(after.identity, field):
                         raise PathPolicyError(
                             "SOURCE_CHANGED", capability=f"windows-changed-{field}"

@@ -703,15 +703,15 @@ def test_windows_final_symlink_native(tmp_path, record_property):
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
-@pytest.mark.parametrize("which", ["source", "ancestor"])
+@pytest.mark.parametrize("which", ["source", "ancestor", "outside-ancestor"])
 def test_windows_pinned_rename_native(tmp_path, which, record_property):
     """Actual pinned file/directory rename attempts must fail or invalidate before reuse."""
-    root = tmp_path / "allowed"
+    root = tmp_path / "outer" / "allowed"
     nested = root / "nested"
     nested.mkdir(parents=True)
     source = nested / "synthetic.log"
     source.write_bytes(b"synthetic\n")
-    target = source if which == "source" else nested
+    target = {"source": source, "ancestor": nested, "outside-ancestor": root.parent}[which]
     with safe._WindowsMetadataProof(source, root) as proof:
         try:
             target.rename(tmp_path / "moved")
@@ -841,6 +841,67 @@ def test_mock_windows_postcheck_identity_change(tmp_path, field):
         native.change = None
         with pytest.raises(safe.PathPolicyError):
             proof.metadata()  # A failed validation poisons/closes the proof permanently.
+    assert sorted(native.closed) == sorted(native.opened)
+
+
+@pytest.mark.parametrize("scope", ["outside", "root", "descendant", "source"])
+@pytest.mark.parametrize("field", ["size_bytes", "mtime_ns", "change_time_ns"])
+def test_mock_windows_mutable_metadata_scope(tmp_path, scope, field):
+    """Unrelated ancestor churn must not refuse; root and descendant evidence stays guarded."""
+    root = tmp_path / "allowed"
+    source = root / "nested" / "synthetic.log"
+    target = {"outside": tmp_path, "root": root, "descendant": source.parent, "source": source}[
+        scope
+    ]
+    native = MockWindowsMetadata()
+    with safe._WindowsMetadataProof(source, root, _native=native) as proof:
+        target_id = native.paths[str(target)]
+        native.change = lambda snapshot: (
+            replace(snapshot, identity=replace(snapshot.identity, **{field: 999}))
+            if snapshot.identity.file_id == target_id
+            else snapshot
+        )
+        if scope == "outside":
+            assert proof.metadata().file_id == native.paths[str(source)]
+        else:
+            with pytest.raises(safe.PathPolicyError) as error:
+                proof.metadata()
+            assert error.value.code == "SOURCE_CHANGED"
+            assert error.value.capability == f"windows-changed-{field}"
+    assert sorted(native.closed) == sorted(native.opened)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("file_id", 999),
+        ("volume_id", 999),
+        ("attributes", 0x11),
+        ("tag", 0xA0000003),
+        ("case_sensitive", True),
+        ("delete_pending", True),
+        ("links", 2),
+        ("final_path", "changed"),
+    ],
+)
+def test_mock_windows_outside_ancestor_structural_mutation(tmp_path, field, value):
+    """Outside-root identity, path, reparse and object-state changes must still refuse and close."""
+    root = tmp_path / "allowed"
+    native = MockWindowsMetadata()
+    with safe._WindowsMetadataProof(root / "synthetic.log", root, _native=native) as proof:
+        target_id = native.paths[str(tmp_path)]
+
+        def change(snapshot):
+            if snapshot.identity.file_id != target_id:
+                return snapshot
+            if field in ("file_id", "volume_id"):
+                return replace(snapshot, identity=replace(snapshot.identity, **{field: value}))
+            actual = snapshot.final_path + "\\changed" if field == "final_path" else value
+            return replace(snapshot, **{field: actual})
+
+        native.change = change
+        with pytest.raises(safe.PathPolicyError):
+            proof.metadata()
     assert sorted(native.closed) == sorted(native.opened)
 
 
@@ -1001,3 +1062,21 @@ def test_windows_directory_entry_mutation_native(configured, record_property):
             "windows-changed-change_time_ns",
         }
         record_property("native_mutation_field", error.value.capability)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows actual sibling mutation")
+def test_windows_outside_root_sibling_mutation_native(tmp_path, record_property):
+    """Creating an unrelated sibling must not invalidate pinned configured-root metadata."""
+    root = tmp_path / "allowed"
+    root.mkdir()
+    source = root / "synthetic.log"
+    source.write_bytes(b"synthetic\n")
+    native = safe._NativeWindows(safe._MetadataBudget())
+    with safe._WindowsMetadataProof(source, root, _native=native) as proof:
+        before = proof.metadata()
+        (tmp_path / "unrelated-owned-sibling").mkdir()
+        assert proof.metadata() == before
+    assert native.open_count == native.close_count
+    assert not safe.capabilities()["data_access_available"]
+    record_property("source_data_access_available", "false")
+    record_property("native_handle_cleanup", "complete")
