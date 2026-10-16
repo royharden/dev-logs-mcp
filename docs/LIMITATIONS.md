@@ -5,17 +5,21 @@
   source metadata/data I/O on Windows. Three native metadata stability checks have failed;
   the required symlink fixture also lacks privilege. These are open capabilities, not passes.
 - Linux uses no-follow O_PATH probes, a fixed-buffer LP64 fstatfs allowlist, pinned data
-  reopening, and identity/containment checks. Native verification of this successor is
-  pending. Unsupported ABI, missing guarantees, FUSE, overlay, and network storage fail closed.
+  reopening, and identity/containment checks. Five native SafePath and two catalog/cache
+  cases passed on CPython3.12.13/glibc2.36/x86-64, alongside the real configured-source
+  seeded demo using tmpfs logs. Independent review is pending. Other filesystems/ABIs
+  are not qualified by this result; missing guarantees, FUSE, overlay and network storage fail closed.
 - The earlier Linux test attempt timed out during container start and yielded no test
   verdict. A later attempt rejected the retained dependency tree before pytest: the
   installer had hashed payload files before adding its receipt, while the verifier
   included that receipt. A receipt-aware successor is prepared but has not run;
   other actual volume changes have not been ruled out. Dependency setup or metadata
   readiness does not establish product runtime support.
-- Five SafePath and two cache/catalog native POSIX checks remain pending on the Windows
-  development host. Independent conformance, sabotage controls, offline scanner,
-  heldout evaluation, clean-wheel and full detached-runtime checks remain required gates.
+- Earlier Windows-host runs could not execute the POSIX cases; later bounded Linux
+  execution passed those seven cases without clearing Windows failures. Independent
+  conformance, sabotage controls, offline scanner, heldout evaluation and full
+  detached-runtime checks remain required gates. Exact local wheel/source metadata
+  verification is separate from native normal use and release acceptance.
   A detached pure-core/synthetic-conformance subset passed with the owner app and MCP
   SDK imports blocked, using existing dependencies. It did not execute native path tests.
 - Large files above 6 MiB require a stable explicit index. Any change invalidates the
@@ -40,5 +44,5 @@
   browser runtime, public package publication, remote CI run, GitHub push, client configuration
   changes, or hosted deployment are established by this local implementation.
 
-Development is paused. See [development status](../DEVELOPMENT-STATUS.md) for the
+Development is active. See [development status](../DEVELOPMENT-STATUS.md) for the
 remaining demo, controller, security, performance and release work.

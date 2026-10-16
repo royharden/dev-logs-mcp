@@ -2,8 +2,9 @@
 
 A local stdio MCP server for bounded, redacted development-log inspection. It implements
 `list_sources`, `tail`, `search`, `read_range`, and `errors` over explicitly configured sources.
-The implementation is under validation. Windows data access fails closed; Linux native
-verification, evaluation, security scanning, packaging, and independent review remain pending.
+The implementation is under validation. A Linux source-profile seeded demo and seven
+native path/catalog/cache cases passed; their independent review is pending. Windows
+data access fails closed. Full conformance, evaluation, security and release gates remain open.
 
 Local development resumed on 2026-10-15. [Development status](DEVELOPMENT-STATUS.md)
 records completed work, work in progress and outstanding gates; [lessons](LESSONS.md)
@@ -29,13 +30,15 @@ redaction, bounded responses, append refresh and unknown/outside-root refusals.
 `mock` selects synthetic inputs; the catalog, filesystem policy and transport are real.
 Windows currently reports `unsupported_required` and exits 3 because data reads
 remain closed. This is a required normal-journey failure, even when the refusal
-regression test passes. Linux normal execution remains unverified.
+regression test passes. The seeded Linux demo passed on CPython 3.12.13, glibc 2.36,
+x86-64 with generated logs on tmpfs. This is a bounded source-profile result;
+other filesystems, Windows no-recall and complete platform acceptance remain unqualified.
 
 ## Example
 
 Create a dedicated directory with synthetic logs and a TOML file using the shape in
 `fixtures/bootstrap.toml`. Relative roots and source paths resolve beside the TOML file.
-Once native Linux validation is complete, the local invocation is:
+On a filesystem meeting the required native guarantees, the local invocation is:
 
 ```sh
 uv run dev-logs-mcp serve /absolute/path/to/sources.toml
@@ -59,8 +62,11 @@ and output-budget primitives. Its detached consumer/conformance verification is 
 
 Product conformance, diagnosis and latency: **not established**. Unit and SDK stdio controls
 have run locally, including all five tools over a test catalog. Those controls do not
-establish native log access. The latest full Windows run has three metadata stability
-failures, seven pending POSIX checks, and an unavailable required symlink fixture.
+establish native log access. A separate real configured-source Linux demo passed all
+five tools with redaction, bounded results, append refresh and both refusal journeys;
+five native SafePath and two catalog/cache tests also passed. Independent review is
+pending. The earlier full Windows run's three metadata failures and unavailable
+required symlink fixture remain unresolved; Linux results do not clear them.
 The planned evaluation uses independently frozen, disjoint synthetic dev/heldout families
 and grep/naive-range baselines. No remote CI or finished-app acceptance is claimed.
 The incident scorer uses canonical evalkit records and controller-recorded response

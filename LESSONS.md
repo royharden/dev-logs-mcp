@@ -5,6 +5,19 @@
   the failing attempt and test error envelopes as well as successful payloads.
 - A demo must return a required-failure status when native reads are unavailable.
   A passing test of the refusal is separate from successful normal use.
+- Propagate transitive dependency extras when deriving an offline closure. MCP's
+  pyjwt[crypto] edge requires cryptography even if a base-only pip check passes.
+  Audit actual wheel Requires-Dist entries and requested extras against the lock.
+- Native extensions need an executable dependency filesystem. Record effective
+  mount flags before importing; fixture mounts can remain noexec. A shared-object
+  mapping failure without those observations does not retrospectively prove a cause.
+- Preserve SystemRoot through explicit-key environment lookup on Windows. Iterating
+  environment keys and filtering with mixed-case literals can drop SYSTEMROOT and
+  break stdlib socket imports; this does not explain separate native no-recall failures.
+- Compare built source bytes to raw Git blobs when claiming a Git-source edition.
+  Working-copy CRLF conversion can produce a different, internally consistent wheel.
+  Bind claims to the exact wheel hash and separate same-toolchain repeatability from
+  cross-platform reproducibility. Source-forced runtime checks need explicit cache policy.
 - Define dependency inventory boundaries before hashing. A payload hash captured
   before writing an installer receipt does not describe the final directory. Verify
   the exact receipt separately; never ignore arbitrary or nested metadata files.
