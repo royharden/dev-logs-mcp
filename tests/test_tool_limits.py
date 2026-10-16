@@ -5,6 +5,7 @@ Memory/clock fixtures are not native filesystem, wire or hard-preemption proof.
 
 import asyncio
 import json
+from dataclasses import replace
 
 import pytest
 from pydantic import ValidationError
@@ -15,6 +16,7 @@ from dev_logs_mcp.query import LogEngine
 from dev_logs_mcp.server import CallGate
 from dev_logs_mcp.shared.mcpkit.bounded_output import OutputBudget
 from dev_logs_mcp.shared.mcpkit.errors import MAX_READ_BYTES
+from dev_logs_mcp.shared.mcpkit.models import LogLine, ToolEnvelope
 from dev_logs_mcp.sources import SourceCatalog
 from tests.test_query import FakeCatalog
 
@@ -171,6 +173,87 @@ def test_one_line_search_page_union_preserves_first_unreturned_match(direction):
         pytest.fail("one-line pagination did not advance")
     expected = list(range(1, 9))
     assert matches == (expected if direction == "oldest_first" else expected[::-1])
+
+
+@pytest.mark.parametrize("frame_budget,width", [(8192, 600), (8192, 700), (6144, 400)])
+@pytest.mark.parametrize("direction", ["oldest_first", "newest_first"])
+def test_byte_pressure_preserves_complete_context_between_probe_limits(
+    frame_budget, width, direction
+):
+    """what_bug_this_catches: probing4 then2 skipped a fitting complete3-line context."""
+    data = b"".join(
+        (
+            f"2026-01-01T00:00:00Z INFO {'hit' if n in (2, 3, 6) else 'miss'} " + "x" * width + "\n"
+        ).encode()
+        for n in range(1, 8)
+    )
+    subject = configured(data, lines=4, frame_bytes=8192)
+    args = {"source_id": "web", "pattern": "hit", "context": 1, "direction": direction}
+    matches = []
+    cursors = set()
+    attempts_by_page = []
+    byte_truncated = False
+    previous = None
+    for _ in range(4):
+        query = subject.call("search", args)
+        original_shrink = query.shrink
+        attempts = []
+
+        def counted(limit, *, calls=attempts, shrink=original_shrink):
+            calls.append(limit)
+            return shrink(limit)
+
+        rendered = replace(query, shrink=counted).render(
+            1, OutputBudget(max_wire_bytes=frame_budget)
+        )
+        page = rendered.envelope
+        assert page.ok and len(rendered.wire_bytes) <= frame_budget
+        anchors = [match.line_no for match in page.matches]
+        assert anchors and len(anchors) == len(set(anchors))
+        expected_lines = sorted({n for anchor in anchors for n in (anchor - 1, anchor, anchor + 1)})
+        assert [line.line_no for line in page.lines] == expected_lines
+        assert len(page.lines) <= 4
+        assert all(line.context == (line.line_no not in anchors) for line in page.lines)
+        if previous is not None:
+            if direction == "oldest_first":
+                assert min(anchors) > max(previous)
+            else:
+                assert max(anchors) < min(previous)
+        previous = anchors
+        assert len(attempts) <= 11
+        attempts_by_page.append(attempts)
+        byte_truncated |= page.truncation.output_bytes
+        matches.extend(anchors)
+        if page.next_cursor is None:
+            break
+        assert page.next_cursor not in cursors
+        cursors.add(page.next_cursor)
+        args = {**args, "cursor": page.next_cursor}
+    else:
+        pytest.fail("byte-limited context pagination did not advance")
+    assert sorted(matches) == [2, 3, 6]
+    if direction == "oldest_first":
+        assert any(3 in attempts for attempts in attempts_by_page)
+        assert byte_truncated
+
+
+def test_line_limited_wire_boundary_does_not_admit_page_by_shortening_flags():
+    """what_bug_this_catches: shortening flags admitted an oversized prefix."""
+    rows = [LogLine(line_no=n, byte_offset=n, text='é🙂"\\' * 20) for n in range(1, 5)]
+    original = ToolEnvelope(ok=True, source_id="web", generation_id="g", lines=rows)
+
+    def shrink(limit):
+        return original.model_copy(
+            update={"lines": rows[:limit], "hint": f"continue at physical line {limit + 1}"}
+        )
+
+    first = OutputBudget(max_lines=1).render(original, "r", shrink)
+    exact = len(first.wire_bytes)
+    assert first.envelope.ok and len(first.envelope.lines) == 1
+    accepted = OutputBudget(max_lines=1, max_wire_bytes=exact).render(original, "r", shrink)
+    assert len(accepted.wire_bytes) == exact and len(accepted.envelope.lines) == 1
+    refused = OutputBudget(max_lines=1, max_wire_bytes=exact - 1).render(original, "r", shrink)
+    assert len(refused.wire_bytes) <= exact - 1 and not refused.envelope.lines
 
 
 def test_passed_deadline_is_clamped_to_original_start_not_reset():
