@@ -151,6 +151,12 @@ Existing proposals and metadata observations do not establish successful executi
   controls remains outstanding; those controls are separate from vendor analyzer controls.
 - Shared source has a detached portable-core check; native path, full application,
   complete consumer and downstream adoption evidence remain separate.
+- The native benchmark entry point now implements exact-size generated formats,
+  preparation/cold/warm/page observations and process I/O/memory measurements.
+  Eleven generator/measurement controls pass; native smoke and required 100 MB/
+  30-repeat results are still unexecuted. Its profiles vary request parameters;
+  configurable lower application ceilings remain an explicit unimplemented gap.
+  See [benchmark scope](docs/BENCHMARK.md).
 
 ## Outstanding work
 
