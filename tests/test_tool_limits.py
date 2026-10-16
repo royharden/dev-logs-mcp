@@ -103,6 +103,76 @@ def test_render_limit_survives_caller_budget_and_error_paths():
     assert json.loads(failed.wire_bytes)["result"]["isError"] is True
 
 
+@pytest.mark.parametrize("limit", [1, 2, 3, 4])
+@pytest.mark.parametrize("tool", ["tail", "read_range", "search"])
+def test_small_line_limits_use_complete_allowance_before_shrinking(limit, tool):
+    """what_bug_this_catches: halving first skipped one-line capacity and wasted small limits."""
+    data = b"".join(f"2026-01-01T00:00:00Z INFO evidence {n}\n".encode() for n in range(1, 9))
+    subject = configured(data, lines=limit, frame_bytes=8192)
+    arguments = {"source_id": "web"}
+    if tool == "tail":
+        arguments["lines"] = 8
+    elif tool == "read_range":
+        arguments.update(start_line=1, end_line=8)
+    else:
+        arguments.update(pattern="evidence", context=0, direction="oldest_first")
+    rendered = subject.call(tool, arguments).render(1)
+    assert rendered.envelope.ok and rendered.truncated
+    expected = list(range(9 - limit, 9)) if tool == "tail" else list(range(1, limit + 1))
+    assert [row.line_no for row in rendered.envelope.lines] == expected
+    assert len(rendered.wire_bytes) <= 8192
+    assert rendered.envelope.next_cursor or rendered.envelope.hint
+
+
+@pytest.mark.parametrize("direction", ["oldest_first", "newest_first"])
+def test_context_unit_equal_to_line_limit_pages_without_losing_evidence(direction):
+    """what_bug_this_catches: a complete three-line context unit was skipped at a three-line cap."""
+    data = b"miss\nhit\nmiss\nmiss\nhit\nmiss\n"
+    subject = configured(data, lines=3, frame_bytes=8192)
+    args = {"source_id": "web", "pattern": "hit", "context": 1, "direction": direction}
+    pages = []
+    seen_cursors = set()
+    for _ in range(3):
+        rendered = subject.call("search", args).render(1)
+        page = rendered.envelope
+        assert page.ok and len(rendered.wire_bytes) <= 8192
+        assert len(page.lines) == 3 and len(page.matches) == 1
+        pages.append(([row.line_no for row in page.lines], page.matches[0].line_no))
+        if page.next_cursor is None:
+            break
+        assert page.next_cursor not in seen_cursors
+        seen_cursors.add(page.next_cursor)
+        args = {**args, "cursor": page.next_cursor}
+    else:
+        pytest.fail("context pagination did not advance")
+    expected = [([1, 2, 3], 2), ([4, 5, 6], 5)]
+    assert pages == (expected if direction == "oldest_first" else expected[::-1])
+
+
+@pytest.mark.parametrize("direction", ["oldest_first", "newest_first"])
+def test_one_line_search_page_union_preserves_first_unreturned_match(direction):
+    """what_bug_this_catches: one-line pages must advance without lost matches."""
+    subject = configured(b"hit\n" * 8, lines=1, frame_bytes=8192)
+    args = {"source_id": "web", "pattern": "hit", "context": 0, "direction": direction}
+    matches = []
+    seen_cursors = set()
+    for _ in range(9):
+        rendered = subject.call("search", args).render(1)
+        page = rendered.envelope
+        assert page.ok and len(rendered.wire_bytes) <= 8192
+        assert len(page.lines) == len(page.matches) == 1
+        matches.append(page.matches[0].line_no)
+        if page.next_cursor is None:
+            break
+        assert page.next_cursor not in seen_cursors
+        seen_cursors.add(page.next_cursor)
+        args = {**args, "cursor": page.next_cursor}
+    else:
+        pytest.fail("one-line pagination did not advance")
+    expected = list(range(1, 9))
+    assert matches == (expected if direction == "oldest_first" else expected[::-1])
+
+
 def test_passed_deadline_is_clamped_to_original_start_not_reset():
     """what_bug_this_catches: admitting after queue time cannot reset a lower deadline."""
     now = [0.0]

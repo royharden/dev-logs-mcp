@@ -135,8 +135,12 @@ class OutputBudget:
         callback_failed = False
         if shrink is not None:
             # At most ten positive/zero attempts for the approved 500-unit ceiling.
-            maximum = min(self.max_lines, max(1, _units(result)))
-            limit = maximum // 2
+            original_units = _units(result)
+            maximum = min(self.max_lines, max(1, original_units))
+            # The original full-unit result already failed its wire check. If
+            # the line ceiling reduces that result, try its entire allowance
+            # before halving; otherwise avoid an identical no-continuation page.
+            limit = maximum if maximum < original_units else maximum // 2
             for _attempt in range(11):
                 try:
                     candidate = shrink(limit)
