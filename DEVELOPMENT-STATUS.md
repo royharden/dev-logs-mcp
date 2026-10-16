@@ -179,7 +179,8 @@ Existing proposals and metadata observations do not establish successful executi
   A separate updated full Linux suite at raw-Git source
   `761139557b6a06281e4969bc8a17d95e5973b4ff` passed **641 cases, 17 named Windows-only
   skips, zero failures/errors**, exact 658-case collection/JUnit match, in 129.15s
-  pytest time. Five required configured-file cases passed: lower-read refusal and
+  test-stage wall time (126.61s pytest-reported time). Five required configured-file
+  cases passed: lower-read refusal and
   actual admission mutation, cache/generation/cursor binding, real five-tool CLI
   stdio for plain/JSONL inputs at lower limits, and a 64 KiB one-repeat final-snapshot
   smoke. All 115 mounted tracked files matched raw Git; 34 locked dependencies

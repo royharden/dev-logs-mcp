@@ -64,6 +64,11 @@ configured-file controls also passed on Linux CPython 3.12.13/glibc 2.36/x86-64:
   and unknown-source refusal. Catalog/control frames retained the global ceiling.
 - A 64 KiB, one-repeat benchmark smoke retained its final workload snapshot.
 
+The largest recorded tool reply was 3834 bytes; catalog replies were 25813 bytes.
+The reduced-read control observed zero baseline source-body bytes and 35000 bytes
+after the one admission mutation. These are the specific configured-file/control
+observations, not complete kernel I/O or all-path ceiling qualification.
+
 These five cases are included in the complete 658-case suite: 641 passed, 17 named
 Windows-only skips, zero failures/errors, exact collection/JUnit identities.
 All 115 mounted tracked files matched raw Git. This is author evidence awaiting
