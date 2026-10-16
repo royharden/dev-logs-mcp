@@ -103,6 +103,24 @@ def test_actual_read_observer_restores_function_even_when_operation_fails():
         os.close(writer)
 
 
+def test_process_io_unavailable_is_unknown_with_reason_not_zero(tmp_path):
+    path = tmp_path / "owned-missing-io"
+    counters, error = bench.process_io_counters(path)
+    assert counters is None and error["reason"] == "FileNotFoundError"
+    assert error["errno"] is not None
+    path.write_text("rchar: malformed\n")
+    counters, error = bench.process_io_counters(path)
+    assert counters is None and error == {"reason": "ValueError", "errno": None}
+
+
+def test_process_io_raw_zero_is_distinct_from_missing(tmp_path):
+    path = tmp_path / "owned-io"
+    path.write_text("rchar: 31\nwchar: 7\nread_bytes: 0\n")
+    counters, error = bench.process_io_counters(path)
+    assert counters == {"rchar": 31, "wchar": 7, "read_bytes": 0}
+    assert error is None
+
+
 def test_request_profiles_are_real_contracts_with_fixed_tools_identical():
     normal = bench.requests("default_request", 1000)
     maximum = bench.requests("maximum_request", 1000)

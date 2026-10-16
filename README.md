@@ -49,6 +49,9 @@ Connect an MCP stdio client to that command. Files above 6 MiB require a stable 
 preflight using `index-source <config> <source_id> --cache-dir <private-cache-directory>`;
 pass the same cache directory to `serve`. Use the seeded demo command above for
 generated inputs; its platform failures are retained in the JSON report.
+Explicit preparation has a separate 120-second cooperative budget shared across
+two possible attempts; MCP calls and automatic small-file indexing remain limited
+to five seconds. Native large-source qualification of that correction is pending.
 Do not use personal or customer logs for development tests.
 
 ## Architecture
@@ -99,6 +102,8 @@ whole-call deadline. Native all-path and performance verification remain open;
 synchronous kernel calls cannot be preempted by the deadline.
 Large continuously changing logs above 6 MiB may remain unavailable for the writer's
 lifetime; strict invalidation prioritizes correct generation/line evidence.
+The first exact 100 MB benchmark failed preparation before warm measurements;
+see [benchmark scope](docs/BENCHMARK.md). No p50/p95 is inferred from those failures.
 Public package installation, publishing, and Bolt deployment remain pending owner actions.
 See [BOLT-HANDOFF](BOLT-HANDOFF.md) for the local Python runtime boundary.
 

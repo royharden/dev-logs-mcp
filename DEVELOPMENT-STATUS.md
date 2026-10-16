@@ -153,10 +153,15 @@ Existing proposals and metadata observations do not establish successful executi
   complete consumer and downstream adoption evidence remain separate.
 - The native benchmark entry point now implements exact-size generated formats,
   preparation/cold/warm/page observations and process I/O/memory measurements.
-  Twelve generator/measurement controls pass; native smoke and required 100 MB/
-  30-repeat results are still unexecuted. Its profiles vary request parameters;
+  The first native run passed 12 controls plus a 64 KiB smoke with 20 warm calls
+  and four sweeps. Both exact 100 MB inputs then failed five-second explicit
+  preparation with INDEX_INCOMPLETE, so no required warm repeat or sweep ran.
+  Process I/O was unavailable (null), not measured zero. Its profiles vary request parameters;
   configurable lower application ceilings remain an explicit unimplemented gap.
-  See [benchmark scope](docs/BENCHMARK.md).
+  A correction gives explicit preparation a separate bounded 120 seconds across
+  retries, retaining five-second MCP calls/auto-index. Seventy-seven focused
+  query/index/benchmark controls pass; native requalification remains pending.
+  See [benchmark scope](docs/BENCHMARK.md) for exact failed input and measurement scope.
 
 ## Outstanding work
 
@@ -174,8 +179,9 @@ Existing proposals and metadata observations do not establish successful executi
    application guard controls. Extend outside-root and complete
    budget/conformance coverage; synthetic transport faults and vendor analyzer
    controls are not those application mutations.
-6. Run the specified 100,000,000-byte plain/JSONL benchmarks with actual read, output,
-   memory and latency observations. No performance values should be inferred from units.
+6. Qualify corrected explicit preparation and finish the 100,000,000-byte plain/JSONL
+   warm benchmarks after the preserved preparation failures. Record actual read,
+   output, memory, process-I/O availability and latency; units do not supply values.
 7. Complete full detached consumption and CI beyond the exact local packaging subset. Standard test
    collection includes the shared-core suite; its native execution gates remain open.
 8. Complete independent finished-app review and explicit release/platform dispositions.

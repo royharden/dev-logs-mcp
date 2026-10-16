@@ -66,21 +66,26 @@ def generate(path, kind, size):
     return {"bytes": size, "lines": count, "sha256": digest.hexdigest(), "format": kind}
 
 
+def process_io_counters(path):
+    try:
+        counters = {
+            key: int(value)
+            for key, value in (line.split(":", 1) for line in path.read_text().splitlines())
+        }
+        return counters, None
+    except (OSError, ValueError) as error:
+        return None, {
+            "reason": type(error).__name__,
+            "errno": error.errno if isinstance(error, OSError) else None,
+        }
+
+
 def process_observation():
     if os.name != "posix":
         return {"process_io": None, "peak_rss_bytes": None, "cgroup_peak_bytes": None}
     import resource
 
-    counters = None
-    try:
-        counters = {
-            key: int(value)
-            for key, value in (
-                line.split(":", 1) for line in Path("/proc/self/io").read_text().splitlines()
-            )
-        }
-    except (OSError, ValueError):
-        pass
+    counters, unavailable = process_io_counters(Path("/proc/self/io"))
     peak = None
     try:
         peak = int(Path("/sys/fs/cgroup/memory.peak").read_text())
@@ -88,6 +93,7 @@ def process_observation():
         pass
     return {
         "process_io": counters,
+        "process_io_unavailable": unavailable,
         "peak_rss_bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
         "cgroup_peak_bytes": peak,
     }
@@ -130,6 +136,8 @@ def measure(action):
         **reads,
         "exception_code": failure,
         "process_io_delta_including_observer_overhead": delta,
+        "process_io_unavailable_before": before.get("process_io_unavailable"),
+        "process_io_unavailable_after": after.get("process_io_unavailable"),
         "process_peak_rss_bytes_so_far": after["peak_rss_bytes"],
         "cgroup_peak_bytes_so_far": after["cgroup_peak_bytes"],
     }

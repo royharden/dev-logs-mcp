@@ -36,6 +36,8 @@ from .shared.mcpkit.redact import Redactor
 from .shared.mcpkit.safe_path import PathPolicyError
 from .sources import SourceCatalog
 
+EXPLICIT_PREPARE_SECONDS = 120.0
+
 
 def _canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
@@ -141,10 +143,12 @@ class LogEngine:
         """Explicit full-source preparation, <=2 fresh handles, no append reuse.
 
         This is CLI preflight, never a hidden large-file tool operation. Both
-        attempts share a five-second/full-source-byte budget, not a new allowance.
+        attempts share one 120-second/full-source-byte preflight budget. This
+        explicit operation is separate from five-second MCP calls and their
+        bounded small-file auto-indexing; no request invokes this preflight.
         """
         source = self.catalog.get(source_id)
-        budget = ReadBudget(MAX_SOURCE_BYTES)
+        budget = ReadBudget(MAX_SOURCE_BYTES, seconds=EXPLICIT_PREPARE_SECONDS)
         for attempt in range(2):
             try:
                 with self.catalog.open(source_id) as handle:

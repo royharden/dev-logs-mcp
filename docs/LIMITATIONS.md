@@ -40,6 +40,12 @@
 - Large files above 6 MiB require a stable explicit index. Any change invalidates the
   generation and cursors. Continuously changing large logs may be unavailable throughout
   the writer lifetime. Small files can auto-index within the per-call budget.
+- Both first exact 100 MB benchmark preparations hit the previous five-second
+  preflight default and returned INDEX_INCOMPLETE. No required warm calls/sweeps ran.
+  Explicit preparation now has a separate finite 120-second cooperative budget shared
+  across two attempts; the five-second MCP call/auto-index ceiling is unchanged.
+  Native qualification of this correction, full process-I/O availability and the
+  configurable lower-limit grid remain open. See [benchmark scope](BENCHMARK.md).
 - The 8 MiB application read budget, 32 KiB full serialized response cap, and cooperative
   five-second deadline require further native all-path/performance proof. Fixed metadata
   syscalls are distinct from file-body reads. Kernel calls cannot be preempted by Python.

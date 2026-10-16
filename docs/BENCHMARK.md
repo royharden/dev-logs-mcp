@@ -47,6 +47,20 @@ No exit code certifies performance or application acceptance. The planned refere
 targets are p95 250 ms for tail and 1000 ms for a search page; every summary retains
 whether those soft targets were met.
 
-Generator/measurement controls have run; the required 100 MB/30-repeat measurements
-remain unexecuted. Consult [development status](../DEVELOPMENT-STATUS.md) for actual
-execution, remaining qualification work and platform boundaries.
+The first native run passed 12 controls and a 64 KiB smoke (20 warm calls/four
+sweeps). At source commit `4d7a2c846bc3a0d2373e88a4c0de11039349b15e`, both exact
+100 MB inputs then failed explicit preparation with `INDEX_INCOMPLETE` after about
+five seconds. Warm calls and full-source sweeps did not execute; no p50/p95 exists.
+Process I/O counters were unavailable and remain null; observed Python reads and
+memory peaks are retained separately. The owned job was removed/released.
+
+The implementation now separates explicit preparation into one 120-second
+cooperative budget shared across its two possible attempts. MCP calls and their
+small-file auto-indexing retain the five-second budget. Seventy-seven focused
+query/index/benchmark controls pass, including a six-second explicit retry, unchanged
+tool timeout and refusal after the finite preparation deadline. These clock/memory
+controls are not native throughput or hard preemption evidence. A new native large
+run is pending; the original failed measurements are not relabelled.
+
+Consult [development status](../DEVELOPMENT-STATUS.md) for execution, remaining
+qualification work and platform boundaries.
