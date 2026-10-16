@@ -20,7 +20,7 @@
   readiness does not establish product runtime support.
 - Earlier Windows-host runs could not execute the POSIX cases; later bounded Linux
   execution passed those seven cases without clearing Windows failures. Independent
-  conformance, application sabotage controls, scanner finding dispositions, heldout evaluation and full
+  conformance beyond the accepted four guard controls/scanner dispositions, heldout evaluation and full
   detached-runtime checks remain required gates. Exact local wheel/source metadata
   verification is separate from native normal use and release acceptance.
   A detached pure-core/synthetic-conformance subset passed with the owner app and MCP
@@ -44,8 +44,13 @@
   preflight default and returned INDEX_INCOMPLETE. No required warm calls/sweeps ran.
   Explicit preparation now has a separate finite 120-second cooperative budget shared
   across two attempts; the five-second MCP call/auto-index ceiling is unchanged.
-  Native qualification of this correction, full process-I/O availability and the
-  configurable lower-limit grid remain open. See [benchmark scope](BENCHMARK.md).
+  A new exact-source run completed both preparations, 600 warm calls and four
+  physical-coordinate sweeps. This is in-process query/renderer observation, not
+  captured stdio latency or full performance qualification. Raw process I/O is
+  unavailable with FileNotFoundError/errno 2, final/sweep memory peaks are not
+  emitted, and configurable lower ceilings remain unimplemented. Total sparse
+  match/no-match reads were 836,100,352/192,274,688 bytes per 100 MB source despite
+  bounded pages. See [benchmark scope](BENCHMARK.md).
 - The 8 MiB application read budget, 32 KiB full serialized response cap, and cooperative
   five-second deadline require further native all-path/performance proof. Fixed metadata
   syscalls are distinct from file-body reads. Kernel calls cannot be preempted by Python.

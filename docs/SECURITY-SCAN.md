@@ -114,5 +114,7 @@ These four checks passed in 2.17s inside the fresh offline job. The job's 54 sou
 files exactly match raw Git at `50b77f8fdeaf1520b066c40949aa8d4065aeae05`.
 They use adapter serialization, not captured SDK stdio. They do not sabotage
 outside-root containment or prove whole-process/global 8 MiB bounds. No production
-guard was relaxed. Independent review is pending; the scanner's original source
-tuple and its 95 findings remain unchanged.
+guard was relaxed. Independent reproduction and acceptance with notes cover those
+exact four controls, retaining the boundaries above. The scanner's original source
+tuple and all 95 findings remain unchanged. Later preparation timing and benchmark
+changes have their own source and review scope.

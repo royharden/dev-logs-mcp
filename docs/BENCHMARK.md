@@ -59,8 +59,60 @@ cooperative budget shared across its two possible attempts. MCP calls and their
 small-file auto-indexing retain the five-second budget. Seventy-seven focused
 query/index/benchmark controls pass, including a six-second explicit retry, unchanged
 tool timeout and refusal after the finite preparation deadline. These clock/memory
-controls are not native throughput or hard preemption evidence. A new native large
-run is pending; the original failed measurements are not relabelled.
+controls are not hard-preemption evidence. The separately authorized native run below
+now supplies source-profile observations; the original failed measurements stay failed.
 
 Consult [development status](../DEVELOPMENT-STATUS.md) for execution, remaining
 qualification work and platform boundaries.
+
+## Observed source-profile run
+
+At exact raw-Git source commit `7d8d095653189b78987cf9450b31d89b3e77556c`, a fresh
+offline Linux CPython 3.12.13/glibc 2.36/x86-64 job completed 77 focused controls,
+the 64 KiB smoke and both exact 100,000,000-byte inputs. Each input has 97,656
+physical lines. Its hashes match the earlier failed inputs. Preparation read exactly
+100,000,000 observed bytes per format and took 4.396s/plain and 4.554s/JSONL;
+each resulting private cache occupied 911,970 bytes. The new 120-second preflight
+bound was in force, while tool calls retained five seconds. These later timings
+do not prove a causal throughput improvement over the earlier attempts.
+
+All 600 warm calls succeeded: 30 distinct repeats per tool, format and request
+profile. Observed Python reads matched application counters and stayed within
+8 MiB; rendered frames stayed within 32 KiB. This table is generated from actual
+records, using nearest-rank p95 over all 30 calls per row. **It measures in-process
+query/renderer latency, not MCP SDK stdio latency.**
+
+| Format | Request profile | Tail p95 (ms) | Search p95 (ms) |
+| --- | --- | ---: | ---: |
+| plain_iso | default_request | 28.76 | 49.65 |
+| plain_iso | maximum_request | 48.08 | 60.35 |
+| jsonl | default_request | 24.65 | 52.04 |
+| jsonl | maximum_request | 51.66 | 50.43 |
+
+The eight tail/search row observations met their soft reference targets on this
+shared host. That is not production performance qualification or generalization.
+Default/maximum profiles vary request parameters, not configurable lower ceilings.
+
+For each format, the sparse match sweep returned exactly 1,006 unique physical
+matches across 103 pages and read 836,100,352 bytes in total. The no-match sweep
+used 23 pages and read 192,274,688 bytes. Every page stayed at or below 8,388,608
+observed bytes and below the full 100 MB source. These repeated-read costs remain
+visible; a bounded page does not imply a one-pass whole-source cost.
+
+The largest recorded memory high-water samples were 48,447,488 process RSS bytes
+and 324,866,048 cgroup bytes through the last warm call. Cgroup memory includes
+the generated file cache. Later final/sweep peaks were not emitted, so the final
+whole-job peak remains unmeasured; these are not per-call allocations. Raw process
+I/O remained null with FileNotFoundError/errno 2. No zeros were substituted and
+no reason for that missing kernel interface is inferred.
+
+Hardware context: shared Intel Core i7-12700H Windows/Docker Desktop host,
+14 physical/20 logical cores and 42,619,097,088 physical RAM bytes reported by
+the host. The job had one CPU quota, 512 MiB/64 PID bounds, read-only root/source/
+wheels, generated-only tmpfs and no network, ports or persistent volumes. Hardware
+was not exclusive. The owned job completed in 291.359s, exited without OOM,
+was removed and released its ledger claim. Exact observation review is pending.
+
+The configurable-limit grid, complete process I/O/final memory capture, native
+production preemption, sustained stress, Windows, evaluation and full application
+acceptance remain open. No scanner or model was invoked by this benchmark.

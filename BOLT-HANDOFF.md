@@ -59,6 +59,16 @@ and named residual risks. No clean-security, application-sabotage or full-app re
 See [security scan](docs/SECURITY-SCAN.md) for reproduction and scope. Application
 dependencies and deterministic runtime remain separate from this optional toolchain.
 
+The standalone benchmark at exact source `7d8d095653189b78987cf9450b31d89b3e77556c`
+completed two exact 100 MB inputs, 600 warm in-process calls and four physical-match
+oracle sweeps. This is query/renderer observation, separate from MCP SDK stdio
+latency. Explicit preparation uses one finite 120-second cooperative budget shared
+across at most two attempts; MCP calls/queue/auto-index remain five seconds.
+The earlier five-second preparation failures stay preserved. Process I/O is
+unavailable, final/sweep memory capture and configurable lower ceilings remain open,
+and the observation tuple awaits independent review. See [benchmark scope](docs/BENCHMARK.md)
+for actual p95s, read amplification and hardware/measurement limits.
+
 Inspection prompt for a future Bolt import:
 
 > Inspect the existing repository and retain its local Python stdio architecture.

@@ -51,7 +51,8 @@ pass the same cache directory to `serve`. Use the seeded demo command above for
 generated inputs; its platform failures are retained in the JSON report.
 Explicit preparation has a separate 120-second cooperative budget shared across
 two possible attempts; MCP calls and automatic small-file indexing remain limited
-to five seconds. Native large-source qualification of that correction is pending.
+to five seconds. Exact-source large-input observations exist; full performance
+qualification is pending.
 Do not use personal or customer logs for development tests.
 
 ## Architecture
@@ -92,7 +93,9 @@ Its isolated developer environment is separate from the application's dependenci
 ## Cost
 
 No model calls in this deterministic MVP. Runtime, storage and index costs are separate
-and not yet benchmarked. The reusable template reserves canonical callledger integration.
+and have bounded local observations in [the benchmark report](docs/BENCHMARK.md).
+Deployment cost and performance qualification remain open. The reusable template
+reserves canonical callledger integration.
 
 ## Limits
 
@@ -103,7 +106,9 @@ synchronous kernel calls cannot be preempted by the deadline.
 Large continuously changing logs above 6 MiB may remain unavailable for the writer's
 lifetime; strict invalidation prioritizes correct generation/line evidence.
 The first exact 100 MB benchmark failed preparation before warm measurements;
-see [benchmark scope](docs/BENCHMARK.md). No p50/p95 is inferred from those failures.
+that failure stays preserved. A separate exact-source run completed 600 warm calls
+and four sweeps; see [benchmark scope](docs/BENCHMARK.md) for observed latencies,
+repeated-read costs and missing process-I/O/configuration evidence.
 Public package installation, publishing, and Bolt deployment remain pending owner actions.
 See [BOLT-HANDOFF](BOLT-HANDOFF.md) for the local Python runtime boundary.
 

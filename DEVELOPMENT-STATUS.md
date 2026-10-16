@@ -117,7 +117,8 @@ Existing proposals and metadata observations do not establish successful executi
   the full 8 MiB/whole-process limit. All 54 mounted files match raw Git exactly;
   all 34 installed dependency versions matched, pip check passed, and the job
   completed in 61.094s with owned container removed/claim released. Independent
-  review and broader guard/conformance coverage remain pending.
+  reproduction and acceptance with notes cover those exact four controls.
+  Broader guard/conformance coverage remains pending; later core changes are separate.
 - The separate optional Cisco MCP Scanner 4.8.6 environment installed 102 exact
   public wheels offline and passed complete installed-version/extra-closure admission
   and pip check. Against implementation commit `eb137ed5e076bb1d507be76ee0a7ef5814e5135c`,
@@ -132,8 +133,8 @@ Existing proposals and metadata observations do not establish successful executi
   Earlier setup/verifier failures remain preserved. The successful run took 97.75s;
   its owned container was removed and resource claim released. See
   [security scan](docs/SECURITY-SCAN.md). Later documentation does not relabel its tree.
-- Application model calls are zero. No actual diagnosis-quality, 100 MB latency,
-  full detached core/runtime, remote-CI or finished-app acceptance
+- Application model calls are zero. No actual diagnosis-quality, complete process
+  I/O/performance qualification, full detached core/runtime, remote-CI or finished-app acceptance
   result exists. Later documentation changes do not relabel the frozen runtime tuple.
 
 ## Worked on / work in progress
@@ -147,8 +148,8 @@ Existing proposals and metadata observations do not establish successful executi
 - The scorer and methods need an actual controller binding source hashes, input
   normalization, implementation/configuration digests, captures and exposure history.
 - The completed definitions-only scanner has accepted narrow dispositions for all
-  95 findings with retained risks. Independent review of the four native application
-  controls remains outstanding; those controls are separate from vendor analyzer controls.
+  95 findings with retained risks. The four original native application controls
+  have independent acceptance with notes; those controls are separate from vendor analyzer controls.
 - Shared source has a detached portable-core check; native path, full application,
   complete consumer and downstream adoption evidence remain separate.
 - The native benchmark entry point now implements exact-size generated formats,
@@ -160,8 +161,15 @@ Existing proposals and metadata observations do not establish successful executi
   configurable lower application ceilings remain an explicit unimplemented gap.
   A correction gives explicit preparation a separate bounded 120 seconds across
   retries, retaining five-second MCP calls/auto-index. Seventy-seven focused
-  query/index/benchmark controls pass; native requalification remains pending.
-  See [benchmark scope](docs/BENCHMARK.md) for exact failed input and measurement scope.
+  query/index/benchmark controls passed in the new native job at raw-Git commit
+  `7d8d095653189b78987cf9450b31d89b3e77556c`. Both exact 100 MB inputs prepared;
+  600 warm calls and four coordinate-checked sweeps completed without operation or
+  observed read/frame failures. Warm in-process tail/search p95 observations met
+  reference targets in each request profile. Process I/O remains null with errno 2;
+  final/sweep memory peaks and the configurable-limit grid remain unqualified.
+  This 291.359s job was removed/released. Independent observation review is pending;
+  it is not stdio latency or production qualification. See [benchmark scope](docs/BENCHMARK.md)
+  for generated tables, repeated-read costs, failed predecessors and exact boundaries.
 
 ## Outstanding work
 
@@ -175,13 +183,13 @@ Existing proposals and metadata observations do not establish successful executi
    safety cache still lacks MCP/RE2; the successful run used a separate fresh tuple.
 4. Complete controller metadata and freeze actual methods/configuration before any
    authorized development or held-out campaign. Preserve all misses/errors/abstentions.
-5. Address retained scanner risks and independent review of the four native
-   application guard controls. Extend outside-root and complete
+5. Address retained scanner risks beyond the four accepted native application
+   guard controls. Extend outside-root and complete
    budget/conformance coverage; synthetic transport faults and vendor analyzer
    controls are not those application mutations.
-6. Qualify corrected explicit preparation and finish the 100,000,000-byte plain/JSONL
-   warm benchmarks after the preserved preparation failures. Record actual read,
-   output, memory, process-I/O availability and latency; units do not supply values.
+6. Obtain independent review of the corrected-preflight/100 MB observations; finish
+   the configurable-limit grid, process-I/O availability, final memory peaks and
+   production-bound/performance qualification. Preserve failed predecessors and raw costs.
 7. Complete full detached consumption and CI beyond the exact local packaging subset. Standard test
    collection includes the shared-core suite; its native execution gates remain open.
 8. Complete independent finished-app review and explicit release/platform dispositions.

@@ -1,5 +1,9 @@
 # Lessons learned
 
+- Separate explicit whole-source preparation from interactive call budgets with
+  finite documented bounds. Preserve failed timing attempts; later faster timings
+  on shared hardware do not prove a causal speedup. Snapshot final/sweep memory
+  separately from phase samples, and retain unavailable I/O with an error reason.
 - Keep tracked fixture inputs visible during source admission. Mount generated
   writable data below the tracked fixture directory; a tmpfs over the entire
   directory can hide a pinned input before tests start. Verify the exact mounted
