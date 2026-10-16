@@ -95,6 +95,16 @@ Existing proposals and metadata observations do not establish successful executi
 - Default pytest collection now includes the reusable mcpkit suite alongside the
   application suite. Collection coverage is separate from execution; known native
   failures remain required failures when those tests run.
+- Four native application safeguard controls passed on a fresh Linux source tuple
+  at `50b77f8fdeaf1520b066c40949aa8d4065aeae05`. The same conformance cases pass
+  before mutation and fail after disabling unknown-ID lookup, default redaction,
+  the 32 KiB renderer cap, or a reduced 4096-byte call read budget. Measurements
+  come from actual authorized-handle reads; frames use the real application renderer,
+  not captured SDK wire. This does not mutate outside-root containment or qualify
+  the full 8 MiB/whole-process limit. All 54 mounted files match raw Git exactly;
+  all 34 installed dependency versions matched, pip check passed, and the job
+  completed in 61.094s with owned container removed/claim released. Independent
+  review and broader guard/conformance coverage remain pending.
 - The separate optional Cisco MCP Scanner 4.8.6 environment installed 102 exact
   public wheels offline and passed complete installed-version/extra-closure admission
   and pip check. Against implementation commit `eb137ed5e076bb1d507be76ee0a7ef5814e5135c`,
@@ -120,7 +130,8 @@ Existing proposals and metadata observations do not establish successful executi
 - The scorer and methods need an actual controller binding source hashes, input
   normalization, implementation/configuration digests, captures and exposure history.
 - The completed definitions-only scanner has proposed dispositions for all 95 findings.
-  Independent finding review and application-level sabotage controls remain outstanding.
+  Independent finding review and review of the four native application controls
+  remain outstanding; those controls are separate from vendor analyzer controls.
 - Shared source has a detached portable-core check; native path, full application,
   complete consumer and downstream adoption evidence remain separate.
 
@@ -136,8 +147,9 @@ Existing proposals and metadata observations do not establish successful executi
 4. Complete controller metadata and freeze actual methods/configuration before any
    authorized development or held-out campaign. Preserve all misses/errors/abstentions.
 5. Resolve independent review/INT disposition of all 95 completed scanner findings
-   and complete actual application-guard sabotage controls; synthetic transport
-   faults and vendor analyzer controls are not those application mutations.
+   and the four native application guard controls. Extend outside-root and complete
+   budget/conformance coverage; synthetic transport faults and vendor analyzer
+   controls are not those application mutations.
 6. Run the specified 100,000,000-byte plain/JSONL benchmarks with actual read, output,
    memory and latency observations. No performance values should be inferred from units.
 7. Complete full detached consumption and CI beyond the exact local packaging subset. Standard test

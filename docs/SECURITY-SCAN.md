@@ -83,3 +83,23 @@ Windows no-recall, complete conformance, benchmarks, independent evaluation or f
 review. See [development status](../DEVELOPMENT-STATUS.md) and
 [limitations](LIMITATIONS.md). Vendor: [Cisco MCP Scanner](https://github.com/cisco-ai-defense/mcp-scanner),
 Apache-2.0; package license files remain in the separate tool environment.
+
+## Separate application safeguard controls
+
+Four later native Linux controls execute the actual SourceCatalog/LogEngine,
+redactor and renderer against generated allowlisted files. Each baseline passes;
+the unchanged conformance oracle detects each test-only mutation:
+
+| Mutated guard | Observed rejection |
+| --- | --- |
+| Unknown-ID lookup redirected to a configured source | `unexpected_status`; baseline reads 0 bytes, mutation reads 7872 |
+| Default secret detectors disabled | `private_marker_leaked`; both read 128 bytes |
+| Renderer cap raised from 32768 to 65536 bytes | `frame_limit`; baseline frame 25909 bytes, mutation 50425 |
+| Remaining-byte guard disabled for a 4096-byte call budget | `read_limit`; baseline reads 0 bytes, mutation reads 7872 |
+
+These four checks passed in 2.17s inside the fresh offline job. The job's 54 source
+files exactly match raw Git at `50b77f8fdeaf1520b066c40949aa8d4065aeae05`.
+They use adapter serialization, not captured SDK stdio. They do not sabotage
+outside-root containment or prove whole-process/global 8 MiB bounds. No production
+guard was relaxed. Independent review is pending; the scanner's original source
+tuple and its 95 findings remain unchanged.

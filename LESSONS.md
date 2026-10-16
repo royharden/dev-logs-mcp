@@ -1,5 +1,9 @@
 # Lessons learned
 
+- Test the same conformance oracle before and after a real application guard mutation.
+  Fabricated unsafe frames only test the checker. Retain native handle observations
+  separately from application counters and distinguish renderer serialization from
+  captured stdio; a reduced-budget control does not qualify the global read ceiling.
 - A vendor coordinator can catch analyzer errors and still label a scan complete.
   Count actual analyzer attempts/completions/errors and run positive and raising
   controls. Preserve all findings for named disposition instead of adjusting prose
