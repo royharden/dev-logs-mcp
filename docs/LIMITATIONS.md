@@ -25,11 +25,18 @@
   verification is separate from native normal use and release acceptance.
   A detached pure-core/synthetic-conformance subset passed with the owner app and MCP
   SDK imports blocked, using existing dependencies. It did not execute native path tests.
-- The current full declared Linux source suite passed 592 cases with 17 explicitly
+- An earlier full declared Linux source suite passed 592 cases with 17 explicitly
   Windows-only skips, zero failures/errors. Collection and execution match all 609
   IDs, using 105 exact raw-Git tracked files. This author-only result awaits independent
   review and does not replace Windows native qualification, full normative coverage,
   detached-wheel normal use, process bounds, performance or evaluation gates.
+- The updated raw-Git source `761139557b6a06281e4969bc8a17d95e5973b4ff` passed 641
+  cases with 17 named Windows-only skips, zero failures/errors and an exact 658-case
+  collection/JUnit match. Its five native configured-file controls include actual
+  five-tool plain/JSONL CLI stdio at lower limits, cache/cursor binding and a reduced
+  read-guard mutation. These are author results, awaiting independent review, on
+  generated tmpfs inputs and the pinned Linux source profile. They do not waive
+  Windows, broader conformance, security/data-loss, detached-runtime or quality gates.
 - The optional Cisco 4.8.6 keyless static scan completed all analyzer calls but returned
   95 findings. Independent review accepted exact evidence and 24 narrow classifications
   with notes; all 95 findings, including 32 HIGH and both credential HIGH findings,
@@ -49,8 +56,8 @@
   captured stdio latency or full performance qualification. Raw process I/O is
   unavailable with FileNotFoundError/errno 2, final/sweep memory peaks are not
   emitted in that run. Optional lower [tool limits](CONFIGURATION-LIMITS.md) now
-  exist in source but native configured-file verification and the performance grid
-  remain pending. Total sparse
+  have the bounded native controls described above; the performance grid remains
+  pending. Total sparse
   match/no-match reads were 836,100,352/192,274,688 bytes per 100 MB source despite
   bounded pages. See [benchmark scope](BENCHMARK.md).
 - The 8 MiB application read budget, 32 KiB full serialized response cap, and cooperative

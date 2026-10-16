@@ -76,10 +76,15 @@ The earlier full Windows run's three metadata failures and unavailable
 required symlink fixture remain unresolved; Linux results do not clear them.
 The planned evaluation uses independently frozen, disjoint synthetic dev/heldout families
 and grep/naive-range baselines. No remote CI or finished-app acceptance is claimed.
-The complete current Linux application/shared-core suite has an author result of
+An earlier complete Linux application/shared-core suite has an author result of
 592 passes and 17 named Windows-only skips, zero failures/errors, across exactly
 609 collected/executed cases. This raw-Git source result awaits independent review;
 it does not clear Windows failures or the remaining normative/performance/eval gates.
+At source `761139557b6a06281e4969bc8a17d95e5973b4ff`, the updated complete suite
+passed **641 cases with 17 named Windows-only skips**, zero failures/errors and an
+exact 658-case collection/execution match. Five native configured-file controls
+passed, including plain/JSONL five-tool CLI stdio with lower instance limits.
+This newer author result awaits independent review; it does not replace the open gates.
 The incident scorer uses canonical evalkit records and controller-recorded response
 references. Its toy controls cover evidence binding and fixed-denominator accounting;
 corpus enrichment, actual campaign execution and controller provenance remain pending.
@@ -106,7 +111,8 @@ synchronous kernel calls cannot be preempted by the deadline.
 An optional [tool-limits configuration](docs/CONFIGURATION-LIMITS.md) tightens read,
 line, tool-result frame and time allowances per instance; it cannot raise them.
 Catalog/control replies retain the global 32 KiB ceiling. Native configured-file
-verification of this new source is pending.
+controls passed on the bounded Linux source profile described above; the complete
+performance configuration grid remains unqualified.
 Large continuously changing logs above 6 MiB may remain unavailable for the writer's
 lifetime; strict invalidation prioritizes correct generation/line evidence.
 The first exact 100 MB benchmark failed preparation before warm measurements;

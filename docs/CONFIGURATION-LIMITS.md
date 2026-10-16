@@ -53,6 +53,24 @@ fields also changes fingerprints from the earlier implementation; prepare large
 sources again after upgrading. Existing cache files are not silently reinterpreted.
 
 Strict configuration/query controls and actual SDK stdio with synthetic memory have
-run. The prepared native configured-file controls require actual Linux execution;
-their presence is not a platform pass. This construction does not relabel the
-older 011 benchmark's fixed-profile observations or establish a performance grid.
+run. At raw-Git source `761139557b6a06281e4969bc8a17d95e5973b4ff`, five required
+configured-file controls also passed on Linux CPython 3.12.13/glibc 2.36/x86-64:
+
+- Authorized-file read admission refused a 128-byte allowance before body reads;
+  removing that one in-process admission guard produced over-budget reads.
+- Changed limits invalidated cache/generation/cursor bindings.
+- Plain-ISO and JSONL files each passed all five actual CLI stdio tools at 2 MiB,
+  three physical lines, 8192 tool-frame bytes and one second, with stable redaction
+  and unknown-source refusal. Catalog/control frames retained the global ceiling.
+- A 64 KiB, one-repeat benchmark smoke retained its final workload snapshot.
+
+These five cases are included in the complete 658-case suite: 641 passed, 17 named
+Windows-only skips, zero failures/errors, exact collection/JUnit identities.
+All 115 mounted tracked files matched raw Git. This is author evidence awaiting
+independent review, limited to generated tmpfs files and that source/runtime profile.
+It does not establish all filesystems, Windows, a performance grid or full-app acceptance.
+The earlier native attempt timed out during its 60-second offline install before
+tests. A separately authorized fresh setup copied and hash-checked the same 34
+wheels into owned tmpfs, with a 120-second install ceiling, and completed. The
+earlier failure and unknown cause remain preserved. No large benchmark was repeated,
+and the older benchmark's fixed-profile values and missing final peaks are unchanged.

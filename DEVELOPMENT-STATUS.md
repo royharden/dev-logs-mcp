@@ -98,7 +98,7 @@ Existing proposals and metadata observations do not establish successful executi
 - Default pytest collection now includes the reusable mcpkit suite alongside the
   application suite. Collection coverage is separate from execution; known native
   failures remain required failures when those tests run.
-- The complete current Linux application/shared-core test suite ran at raw-Git
+- An earlier complete Linux application/shared-core test suite ran at raw-Git
   source commit `c0b31755d527c8c20aeff9e8ec2e6cf8707d7ee6`: **592 passed, 17 skipped,
   zero failures/errors**, 45.91s pytest time. All 609 collected case IDs match
   the 609 JUnit cases exactly; all 17 skips are explicitly Windows-specific.
@@ -176,8 +176,21 @@ Existing proposals and metadata observations do not establish successful executi
   for generated tables, repeated-read costs, failed predecessors and exact boundaries.
 - Current lower-limit construction passed strict scalar/default/hash/query/clock
   controls and captured real SDK stdio using explicit synthetic-memory storage.
-  Prepared native configured-file controls remain unexecuted; those unit/wire
-  results do not clear Linux, Windows or full-app gates. A failed first wire fixture
+  A separate updated full Linux suite at raw-Git source
+  `761139557b6a06281e4969bc8a17d95e5973b4ff` passed **641 cases, 17 named Windows-only
+  skips, zero failures/errors**, exact 658-case collection/JUnit match, in 129.15s
+  pytest time. Five required configured-file cases passed: lower-read refusal and
+  actual admission mutation, cache/generation/cursor binding, real five-tool CLI
+  stdio for plain/JSONL inputs at lower limits, and a 64 KiB one-repeat final-snapshot
+  smoke. All 115 mounted tracked files matched raw Git; 34 locked dependencies
+  passed actual version admission and pip check. The 243.844s owned job was removed
+  and released. This is author evidence awaiting independent review, not full platform,
+  performance-grid, security, evaluation or application acceptance.
+  Its predecessor timed out during a 60-second offline install before tests.
+  The new separately authorized setup copied/hash-checked source and target bytes
+  for the same 34 wheels into owned tmpfs and used a 120-second install ceiling.
+  The earlier failure remains preserved, with its cause unknown; no large benchmark
+  was rerun. A failed first wire fixture
   used the wrong initialization method for the SDK protocol version; its corrected
   legacy/modern handshakes passed, with the failed attempt retained separately.
 
@@ -197,7 +210,7 @@ Existing proposals and metadata observations do not establish successful executi
    guard controls. Extend outside-root and complete
    budget/conformance coverage; synthetic transport faults and vendor analyzer
    controls are not those application mutations.
-6. Complete native lower-limit configured-file checks and independent review; finish
+6. Obtain independent review of the native lower-limit controls and current suite; finish
    the performance configuration grid, process-I/O availability, final memory peaks and
    production-bound/performance qualification. Preserve failed predecessors and raw costs.
 7. Complete full detached consumption and CI beyond the exact local packaging subset. Standard test

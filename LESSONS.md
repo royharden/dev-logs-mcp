@@ -1,5 +1,9 @@
 # Lessons learned
 
+- Save phase timing and bounded partial stdout/stderr with raw hashes before
+  refusing a timed-out setup. Keep prior failures intact; changed storage and larger
+  prospective bounds do not explain an earlier timeout. Admit the full declared test
+  stage only when setup, smoke, final capture and cleanup still fit the original budget.
 - Carry instance limits through admission, the engine, rendering and final SDK bytes.
   Start the deadline before queueing; never reset it at execution. Bound tool-result
   frames separately from catalog discovery and bind configuration changes to cache

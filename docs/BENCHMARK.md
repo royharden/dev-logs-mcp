@@ -126,3 +126,7 @@ The current script additionally emits a final workload memory snapshot after swe
 and generated-fixture cleanup, before final record serialization. This source change
 does not supply the missing final/sweep peaks for the frozen run above. Its small
 smoke control and future observations must retain their own exact source identity.
+That small 64 KiB/one-repeat control passed at source
+`761139557b6a06281e4969bc8a17d95e5973b4ff`, retaining 20 warm-call rows, four sweeps
+and a final workload snapshot. Raw process I/O remained unavailable with errno 2.
+This does not repeat or qualify the 100 MB observations or lower-limit performance grid.

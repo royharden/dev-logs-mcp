@@ -68,8 +68,12 @@ The earlier five-second preparation failures stay preserved. Process I/O is
 unavailable, and final/sweep memory was not captured in that run. Independent audit
 accepted the attributed observation tuple with notes, without runtime reproduction.
 The current source adds optional lower [tool limits](docs/CONFIGURATION-LIMITS.md)
-and a final-workload memory snapshot; native configured-file checks are pending,
-and the performance configuration grid remains open. See [benchmark scope](docs/BENCHMARK.md)
+and a final-workload memory snapshot. Five native configured-file controls passed
+at source `761139557b6a06281e4969bc8a17d95e5973b4ff`, including real plain/JSONL
+five-tool CLI stdio at lower limits. The complete updated suite passed 641 cases,
+with 17 named Windows-only skips and an exact 658-case execution/collection match;
+all 115 tracked source files matched raw Git. This author result is review-pending.
+The performance configuration grid remains open. See [benchmark scope](docs/BENCHMARK.md)
 for actual p95s, read amplification and hardware/measurement limits.
 
 Inspection prompt for a future Bolt import:
