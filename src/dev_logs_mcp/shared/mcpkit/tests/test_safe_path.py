@@ -702,6 +702,29 @@ def test_windows_final_symlink_native(tmp_path, record_property):
         link.unlink()
 
 
+def _assert_blocked_windows_rename_revalidation(proof, native, record_property):
+    """A blocked rename permits stable metadata, detected change, or exact safe expiry."""
+    metadata = None
+    try:
+        metadata = proof.metadata()
+    except safe.PathPolicyError as changed:
+        if changed.code == "SOURCE_CHANGED":
+            outcome = "blocked-and-invalidated"
+        else:
+            assert changed.code == "SOURCE_NOT_LOCAL"
+            assert changed.capability == "windows-metadata-deadline"
+            outcome = "blocked-and-expired"
+            record_property("mutation_revalidation_qualification", "not-exercised-deadline")
+        assert metadata is None and native.open_count == native.close_count
+        with pytest.raises(safe.PathPolicyError) as poisoned:
+            proof.metadata()
+        assert poisoned.value.code == "SOURCE_CHANGED"
+    else:
+        assert metadata.file_id > 0
+        outcome = "blocked"
+    record_property("native_rename_outcome", outcome)
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
 @pytest.mark.parametrize("which", ["source", "ancestor", "outside-ancestor"])
 def test_windows_pinned_rename_native(tmp_path, which, record_property):
@@ -712,22 +735,21 @@ def test_windows_pinned_rename_native(tmp_path, which, record_property):
     source = nested / "synthetic.log"
     source.write_bytes(b"synthetic\n")
     target = {"source": source, "ancestor": nested, "outside-ancestor": root.parent}[which]
-    with safe._WindowsMetadataProof(source, root) as proof:
+    native = safe._NativeWindows(safe._MetadataBudget())
+    with safe._WindowsMetadataProof(source, root, _native=native) as proof:
         try:
             target.rename(tmp_path / "moved")
         except OSError as error:
             assert error.winerror in (5, 32, 33)
-            try:
-                assert proof.metadata().file_id > 0
-            except safe.PathPolicyError as changed:
-                assert changed.code == "SOURCE_CHANGED"
-                record_property("native_rename_outcome", "blocked-and-invalidated")
-            else:
-                record_property("native_rename_outcome", "blocked")
+            record_property("native_os_rename_refused", "true")
+            _assert_blocked_windows_rename_revalidation(proof, native, record_property)
         else:
-            with pytest.raises(safe.PathPolicyError):
+            with pytest.raises(safe.PathPolicyError) as changed:
                 proof.metadata()
+            assert changed.value.code == "SOURCE_CHANGED"
             record_property("native_rename_outcome", "detected")
+    assert native.open_count == native.close_count
+    record_property("native_handle_cleanup", "complete")
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows actual metadata proof")
@@ -801,6 +823,52 @@ class MockWindowsMetadata:
     @staticmethod
     def ordinal_equal(left, right):
         return left.upper() == right.upper()  # ASCII mechanism cases only, never Unicode proof.
+
+
+def test_mock_windows_blocked_rename_expiry_is_refusal_not_mutation_proof(tmp_path, monkeypatch):
+    """what_bug_this_catches: safe expiry was rejected or counted as mutation qualification."""
+    clock = [0.0]
+    monkeypatch.setattr(safe, "monotonic", lambda: clock[0])
+    native = MockWindowsMetadata()
+    # The recorder exercises the native test's classification, without claiming an OS rename.
+    records = {}
+    with safe._WindowsMetadataProof(tmp_path / "synthetic.log", tmp_path, _native=native) as proof:
+        native.open_count = len(native.opened)
+        native.close_count = 0
+        original_close = native.close
+
+        def close(handle):
+            original_close(handle)
+            native.close_count += 1
+
+        native.close = close
+        clock[0] = safe.WINDOWS_METADATA_SECONDS
+        _assert_blocked_windows_rename_revalidation(proof, native, records.__setitem__)
+    assert sorted(native.closed) == sorted(native.opened)
+    assert records["native_rename_outcome"] == "blocked-and-expired"
+    assert records["mutation_revalidation_qualification"] == "not-exercised-deadline"
+
+
+@pytest.mark.parametrize(
+    "code,capability",
+    [
+        ("SOURCE_NOT_LOCAL", "windows-metadata-call-limit"),
+        ("SOURCE_NOT_LOCAL", "windows-canonical-budget"),
+        ("PATH_FORBIDDEN", "windows-metadata-deadline"),
+    ],
+)
+def test_mock_windows_blocked_rename_rejects_unrelated_refusal(tmp_path, code, capability):
+    """what_bug_this_catches: arbitrary refusal cannot silently satisfy rename qualification."""
+    native = MockWindowsMetadata()
+    with safe._WindowsMetadataProof(tmp_path / "synthetic.log", tmp_path, _native=native) as proof:
+
+        def refuse(_snapshot):
+            raise safe.PathPolicyError(code, capability=capability)
+
+        native.change = refuse
+        with pytest.raises(AssertionError):
+            _assert_blocked_windows_rename_revalidation(proof, native, lambda *_: None)
+    assert sorted(native.closed) == sorted(native.opened)
 
 
 @pytest.mark.parametrize(
