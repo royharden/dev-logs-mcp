@@ -72,6 +72,10 @@ The earlier full Windows run's three metadata failures and unavailable
 required symlink fixture remain unresolved; Linux results do not clear them.
 The planned evaluation uses independently frozen, disjoint synthetic dev/heldout families
 and grep/naive-range baselines. No remote CI or finished-app acceptance is claimed.
+The complete current Linux application/shared-core suite has an author result of
+592 passes and 17 named Windows-only skips, zero failures/errors, across exactly
+609 collected/executed cases. This raw-Git source result awaits independent review;
+it does not clear Windows failures or the remaining normative/performance/eval gates.
 The incident scorer uses canonical evalkit records and controller-recorded response
 references. Its toy controls cover evidence binding and fixed-denominator accounting;
 corpus enrichment, actual campaign execution and controller provenance remain pending.

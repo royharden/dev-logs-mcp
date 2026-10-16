@@ -95,6 +95,19 @@ Existing proposals and metadata observations do not establish successful executi
 - Default pytest collection now includes the reusable mcpkit suite alongside the
   application suite. Collection coverage is separate from execution; known native
   failures remain required failures when those tests run.
+- The complete current Linux application/shared-core test suite ran at raw-Git
+  source commit `c0b31755d527c8c20aeff9e8ec2e6cf8707d7ee6`: **592 passed, 17 skipped,
+  zero failures/errors**, 45.91s pytest time. All 609 collected case IDs match
+  the 609 JUnit cases exactly; all 17 skips are explicitly Windows-specific.
+  All 105 tracked files matched binary Git blobs. The fresh offline environment
+  admitted all 34 installed versions without differences/duplicates and passed
+  pip check. It exercised the existing real MCP SDK/native/demo tests and shared
+  controls; scanner unit tests used explicit fakes, without vendor/model packages.
+  The entire owned job took 133.593s and was removed/released. An earlier setup
+  attempt masked a tracked fixture and failed before installation/tests; its failure
+  is preserved. This full declared test-tuple result is author-only, review-pending,
+  and does not qualify Windows, complete normative conformance, detached-wheel
+  normal use, production hard deadlines, 100 MB performance or evaluation quality.
 - Four native application safeguard controls passed on a fresh Linux source tuple
   at `50b77f8fdeaf1520b066c40949aa8d4065aeae05`. The same conformance cases pass
   before mutation and fail after disabling unknown-ID lookup, default redaction,
@@ -143,9 +156,10 @@ Existing proposals and metadata observations do not establish successful executi
 
 1. Explain the three Windows metadata failures and establish Windows data/no-recall
    guarantees before enabling data reads. No Linux-only acceptance exception is adopted.
-2. Obtain independent review of the two-case catalog/cache supplement and run full
-   application/conformance checks with exact dependency/source binding. Five SafePath
-   cases and the seeded Linux demo have exact-capsule acceptance with notes.
+2. Obtain independent review of the current full Linux test tuple and remaining
+   native application/conformance coverage with exact dependency/source binding.
+   The two-case catalog/cache supplement is author-only; five SafePath cases and
+   the earlier seeded Linux demo have exact-capsule acceptance with notes.
 3. Extend actual configured-source and detached-runtime coverage. The old retained
    safety cache still lacks MCP/RE2; the successful run used a separate fresh tuple.
 4. Complete controller metadata and freeze actual methods/configuration before any

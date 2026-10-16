@@ -1,5 +1,9 @@
 # Lessons learned
 
+- Keep tracked fixture inputs visible during source admission. Mount generated
+  writable data below the tracked fixture directory; a tmpfs over the entire
+  directory can hide a pinned input before tests start. Verify the exact mounted
+  source edition and retain such setup failures separately from product verdicts.
 - Test the same conformance oracle before and after a real application guard mutation.
   Fabricated unsafe frames only test the checker. Retain native handle observations
   separately from application counters and distinguish renderer serialization from

@@ -25,6 +25,11 @@
   verification is separate from native normal use and release acceptance.
   A detached pure-core/synthetic-conformance subset passed with the owner app and MCP
   SDK imports blocked, using existing dependencies. It did not execute native path tests.
+- The current full declared Linux source suite passed 592 cases with 17 explicitly
+  Windows-only skips, zero failures/errors. Collection and execution match all 609
+  IDs, using 105 exact raw-Git tracked files. This author-only result awaits independent
+  review and does not replace Windows native qualification, full normative coverage,
+  detached-wheel normal use, process bounds, performance or evaluation gates.
 - The optional Cisco 4.8.6 keyless static scan completed all analyzer calls but returned
   95 findings. Independent review accepted exact evidence and 24 narrow classifications
   with notes; all 95 findings, including 32 HIGH and both credential HIGH findings,

@@ -42,6 +42,15 @@ conversion; all declared capsule files have no other byte changes. The accepted
 raw-Git wheel and Linux source capsule are distinct editions.
 Passing refusal regressions does not establish release readiness.
 
+The later full declared Linux suite at raw-Git source commit
+`c0b31755d527c8c20aeff9e8ec2e6cf8707d7ee6` passed 592 cases, with 17 named
+Windows-only skips and zero failures/errors. Its 609 collected IDs match the
+executed JUnit cases; all 105 mounted tracked files match raw Git exactly.
+This author-only result includes existing MCP SDK/native/demo tests, and remains
+independent-review pending. It is a source edition, separate from the earlier
+newline-converted capsules and detached wheel; remaining platform, normative,
+performance and evaluation gates still apply.
+
 An optional developer security check uses a separate pinned Linux/Python 3.12 scanner
 environment. Cisco MCP Scanner 4.8.6 completed the exported five-tool definitions in
 a fresh offline container, reporting 95 findings. Independent review accepted the
