@@ -42,6 +42,14 @@ def test_generator_refuses_unknown_or_truncated_record(args):
         bench.record_bytes(*args)
 
 
+def test_sparse_match_oracle_uses_physical_record_number():
+    """what_bug_this_catches: equal aggregate counts cannot hide wrong line coordinates."""
+    matched = json.loads(bench.record_bytes("jsonl", 97, 1024))
+    other = json.loads(bench.record_bytes("jsonl", 98, 1024))
+    assert "needle_hit" in matched["message"]
+    assert "needle_hit" not in other["message"]
+
+
 def test_failed_latency_samples_remain_in_percentiles_and_unknowns_stay_null():
     """what_bug_this_catches: dropping failed slow calls creates a false fast p95."""
     rows = [

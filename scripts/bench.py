@@ -287,6 +287,8 @@ def benchmark(directory, size, repeats, emit, deadline):
             ("no_match", "not_present_in_generated_data"),
         ):
             pages = matches = actual_bytes = reported_bytes = 0
+            max_page_reads = max_page_frame = 0
+            matched_lines = set()
             seen = set()
             cursor = None
             status = "page-bound-reached"
@@ -305,6 +307,8 @@ def benchmark(directory, size, repeats, emit, deadline):
                 actual_bytes += observed["os_read_bytes"]
                 reported_bytes += observed["reported_read_bytes"] or 0
                 matches += observed["matches"]
+                max_page_reads = max(max_page_reads, observed["os_read_bytes"])
+                max_page_frame = max(max_page_frame, observed["rendered_frame_bytes"] or 0)
                 if (
                     not observed["ok"]
                     or not observed["read_cap_respected"]
@@ -313,6 +317,13 @@ def benchmark(directory, size, repeats, emit, deadline):
                 ):
                     status = observed["code"] or "BOUND_FAILURE"
                     break
+                page_lines = [match.line_no for match in envelope.matches]
+                if len(set(page_lines)) != len(page_lines) or matched_lines.intersection(
+                    page_lines
+                ):
+                    status = "duplicate-match-coordinate"
+                    break
+                matched_lines.update(page_lines)
                 cursor = envelope.next_cursor
                 if cursor is None:
                     status = "completed"
@@ -331,12 +342,16 @@ def benchmark(directory, size, repeats, emit, deadline):
                     "matches": matches,
                     "os_read_bytes": actual_bytes,
                     "reported_read_bytes": reported_bytes,
+                    "max_os_read_bytes_per_page": max_page_reads,
+                    "max_rendered_frame_bytes_per_page": max_page_frame,
+                    "unique_physical_matches": len(matched_lines),
                     "duration_ms": (time.perf_counter() - sweep_start) * 1000,
                 }
             )
-            if status != "completed" or matches != (
-                fixture["lines"] // 97 if label == "match" else 0
-            ):
+            expected_matches = (
+                set(range(97, fixture["lines"] + 1, 97)) if label == "match" else set()
+            )
+            if status != "completed" or matched_lines != expected_matches:
                 failures.append(
                     {
                         "format": kind,
