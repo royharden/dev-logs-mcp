@@ -1,5 +1,19 @@
 # Lessons learned
 
+- A vendor coordinator can catch analyzer errors and still label a scan complete.
+  Count actual analyzer attempts/completions/errors and run positive and raising
+  controls. Preserve all findings for named disposition instead of adjusting prose
+  or disabling rules to improve a heuristic score.
+- Normalize Python distribution identities using the complete PEP 503 rule, including
+  dots. Compare the full resolved extras closure to actual installed metadata and
+  reject duplicates; base pip check alone does not prove requested extras were installed.
+- Full scanner initialization may import model-related libraries even in keyless mode.
+  Review the pinned import path, disable dotenv/remote metadata, enforce OS isolation,
+  and distinguish imports from actual model/provider calls. Keep optional scanner
+  dependencies separate from the lean application environment.
+- Git archive can convert every source file's newlines. Verify capsule bytes against
+  raw Git and retain the edition difference even when behavior checks pass; never
+  silently transfer a source-capsule result to a separately built raw-Git wheel.
 - Validate strict structured transport models in JSON mode when enum values arrive
   as strings. Python-object validation can reject a valid wire response. Preserve
   the failing attempt and test error envelopes as well as successful payloads.

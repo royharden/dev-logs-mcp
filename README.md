@@ -2,9 +2,10 @@
 
 A local stdio MCP server for bounded, redacted development-log inspection. It implements
 `list_sources`, `tail`, `search`, `read_range`, and `errors` over explicitly configured sources.
-The implementation is under validation. A Linux source-profile seeded demo and seven
-native path/catalog/cache cases passed; their independent review is pending. Windows
-data access fails closed. Full conformance, evaluation, security and release gates remain open.
+The implementation is under validation. The Linux source-profile seeded demo and five
+native SafePath cases have independent acceptance with notes for that exact capsule;
+two further catalog/cache cases have author-only results. Windows data access fails
+closed. Full conformance, evaluation, security and release gates remain open.
 
 Local development resumed on 2026-10-15. [Development status](DEVELOPMENT-STATUS.md)
 records completed work, work in progress and outstanding gates; [lessons](LESSONS.md)
@@ -64,14 +65,21 @@ Product conformance, diagnosis and latency: **not established**. Unit and SDK st
 have run locally, including all five tools over a test catalog. Those controls do not
 establish native log access. A separate real configured-source Linux demo passed all
 five tools with redaction, bounded results, append refresh and both refusal journeys;
-five native SafePath and two catalog/cache tests also passed. Independent review is
-pending. The earlier full Windows run's three metadata failures and unavailable
+five native SafePath cases were independently reproduced and accepted with notes.
+Two catalog/cache cases passed separately without independent reproduction. The
+Linux capsules use newline-converted Git-archive source, not the raw-Git wheel edition.
+The earlier full Windows run's three metadata failures and unavailable
 required symlink fixture remain unresolved; Linux results do not clear them.
 The planned evaluation uses independently frozen, disjoint synthetic dev/heldout families
 and grep/naive-range baselines. No remote CI or finished-app acceptance is claimed.
 The incident scorer uses canonical evalkit records and controller-recorded response
 references. Its toy controls cover evidence binding and fixed-denominator accounting;
 corpus enrichment, actual campaign execution and controller provenance remain pending.
+
+The optional [offline security scan](docs/SECURITY-SCAN.md) completed all five public
+tool definitions with Cisco MCP Scanner 4.8.6 and reported 95 findings. Named author
+dispositions await independent review; completion is not a clean-security result.
+Its isolated developer environment is separate from the application's dependencies.
 
 ## Cost
 

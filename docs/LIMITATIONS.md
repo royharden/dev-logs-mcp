@@ -7,7 +7,10 @@
 - Linux uses no-follow O_PATH probes, a fixed-buffer LP64 fstatfs allowlist, pinned data
   reopening, and identity/containment checks. Five native SafePath and two catalog/cache
   cases passed on CPython3.12.13/glibc2.36/x86-64, alongside the real configured-source
-  seeded demo using tmpfs logs. Independent review is pending. Other filesystems/ABIs
+  seeded demo using tmpfs logs. Independent acceptance with notes covers the exact
+  five-case/demo capsule; the two catalog/cache cases remain author-only. Capsule
+  Python source is newline-converted Git archive, not the raw-Git wheel edition.
+  Other filesystems/ABIs
   are not qualified by this result; missing guarantees, FUSE, overlay and network storage fail closed.
 - The earlier Linux test attempt timed out during container start and yielded no test
   verdict. A later attempt rejected the retained dependency tree before pytest: the
@@ -17,11 +20,16 @@
   readiness does not establish product runtime support.
 - Earlier Windows-host runs could not execute the POSIX cases; later bounded Linux
   execution passed those seven cases without clearing Windows failures. Independent
-  conformance, sabotage controls, offline scanner, heldout evaluation and full
+  conformance, application sabotage controls, scanner finding dispositions, heldout evaluation and full
   detached-runtime checks remain required gates. Exact local wheel/source metadata
   verification is separate from native normal use and release acceptance.
   A detached pure-core/synthetic-conformance subset passed with the owner app and MCP
   SDK imports blocked, using existing dependencies. It did not execute native path tests.
+- The optional Cisco 4.8.6 keyless static scan completed all analyzer calls but returned
+  95 findings. All named author dispositions remain independent-review/INT pending;
+  no automatic waiver or clean-security claim is made. Definitions-only heuristics
+  do not qualify server behavior, dependencies for CVEs or an external agent's prompt
+  robustness. See [security scan](SECURITY-SCAN.md).
 - Large files above 6 MiB require a stable explicit index. Any change invalidates the
   generation and cursors. Continuously changing large logs may be unavailable throughout
   the writer lifetime. Small files can auto-index within the per-call budget.

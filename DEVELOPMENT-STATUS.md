@@ -1,4 +1,4 @@
-# Development status — 2026-10-15
+# Development status — 2026-10-16
 
 **Local development resumed. Prototype under validation; no release acceptance.**
 Native safety, dependency, evaluation and independent review gates remain open.
@@ -64,10 +64,15 @@ Existing proposals and metadata observations do not establish successful executi
   append/generation refresh and outside-root CONFIG_INVALID. A separate run passed
   two native catalog/cache cases, including privacy-mode and hard-link rejection.
   Both used CPython3.12.13/glibc2.36/x86-64, fresh offline source-profile environments
-  and tmpfs fixture data; independent review is pending. No other filesystem/Windows
+  and tmpfs fixture data. Independent reproduction and acceptance with notes cover
+  the exact five-case/demo capsule; the two-case supplement is author-only. No other filesystem/Windows
   or detached-wheel normal result is implied. Owned containers were removed and
   ledger claims released. A copied supervisor normal-status field in the two-case
   supplement is not a new demo result; its worker correctly records no demo rerun.
+- The Linux capsule edition was subsequently audited directly against Git blobs.
+  All 50 Python source files differ only by CRLF-to-LF conversion; all 55/60 declared
+  capsule files have zero non-newline differences. These source capsules are not
+  the raw-Git wheel edition. Independent acceptance retains that edition boundary.
 - A disjoint source synthetic parser/query/generation/cache/window slice passed 121
   cases; one native case was deselected. This is neither a full suite nor detached proof.
 - Exact local packaging verification exists in two distinct editions at that same
@@ -81,7 +86,8 @@ Existing proposals and metadata observations do not establish successful executi
   has 56 entries, all 50 source files and both root notices matching raw Git. Two
   independent backend processes with the same source/toolchain/epoch produced
   identical hashes. A fresh offline install passed imports and version/config/catalog
-  checks; independent disposition is pending. This is same-toolchain repeatability,
+  checks; independent disposition accepted that exact packaging subset with notes.
+  This is same-toolchain repeatability,
   not cross-platform reproducibility. The earlier Windows dependency cache proves
   RECORD-qualified copied members, not original upstream ZIP authenticity. Its old
   runtime contains existing bytecode; source-forced checks preserved that inventory.
@@ -89,8 +95,18 @@ Existing proposals and metadata observations do not establish successful executi
 - Default pytest collection now includes the reusable mcpkit suite alongside the
   application suite. Collection coverage is separate from execution; known native
   failures remain required failures when those tests run.
+- The separate optional Cisco MCP Scanner 4.8.6 environment installed 102 exact
+  public wheels offline and passed complete installed-version/extra-closure admission
+  and pip check. Against implementation commit `eb137ed5e076bb1d507be76ee0a7ef5814e5135c`,
+  actual coverage was YARA 10/10, readiness 5/5 and prompt-defense 5/5, zero analyzer
+  errors. Real positive controls and a deliberately raising analyzer verified the
+  completion guard. The scan returned 95 findings (2/40/53); all have named author
+  dispositions awaiting independent review/INT decision, with zero automatic waivers.
+  Earlier setup/verifier failures remain preserved. The successful run took 97.75s;
+  its owned container was removed and resource claim released. See
+  [security scan](docs/SECURITY-SCAN.md). Later documentation does not relabel its tree.
 - Application model calls are zero. No actual diagnosis-quality, 100 MB latency,
-  offline-scanner, full detached core/runtime, remote-CI or finished-app acceptance
+  full detached core/runtime, remote-CI or finished-app acceptance
   result exists. Later documentation changes do not relabel the frozen runtime tuple.
 
 ## Worked on / work in progress
@@ -103,8 +119,8 @@ Existing proposals and metadata observations do not establish successful executi
   has executed; private fixture material is not part of this repository.
 - The scorer and methods need an actual controller binding source hashes, input
   normalization, implementation/configuration digests, captures and exposure history.
-- Scanner package/interface research is complete enough to propose bounded setup;
-  the scanner has not been installed or executed in the product workflow.
+- The completed definitions-only scanner has proposed dispositions for all 95 findings.
+  Independent finding review and application-level sabotage controls remain outstanding.
 - Shared source has a detached portable-core check; native path, full application,
   complete consumer and downstream adoption evidence remain separate.
 
@@ -112,15 +128,16 @@ Existing proposals and metadata observations do not establish successful executi
 
 1. Explain the three Windows metadata failures and establish Windows data/no-recall
    guarantees before enabling data reads. No Linux-only acceptance exception is adopted.
-2. Obtain independent review of the seven executed POSIX path/cache/catalog cases
-   and run full application/conformance checks with exact dependency/source binding.
-3. Obtain independent review of the successful seeded Linux source-profile demo,
-   then extend actual configured-source and detached-runtime coverage. The old retained
+2. Obtain independent review of the two-case catalog/cache supplement and run full
+   application/conformance checks with exact dependency/source binding. Five SafePath
+   cases and the seeded Linux demo have exact-capsule acceptance with notes.
+3. Extend actual configured-source and detached-runtime coverage. The old retained
    safety cache still lacks MCP/RE2; the successful run used a separate fresh tuple.
 4. Complete controller metadata and freeze actual methods/configuration before any
    authorized development or held-out campaign. Preserve all misses/errors/abstentions.
-5. Complete actual application-guard sabotage controls and the mandatory offline
-   security scan; synthetic transport faults are not those application mutations.
+5. Resolve independent review/INT disposition of all 95 completed scanner findings
+   and complete actual application-guard sabotage controls; synthetic transport
+   faults and vendor analyzer controls are not those application mutations.
 6. Run the specified 100,000,000-byte plain/JSONL benchmarks with actual read, output,
    memory and latency observations. No performance values should be inferred from units.
 7. Complete full detached consumption and CI beyond the exact local packaging subset. Standard test
