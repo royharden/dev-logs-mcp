@@ -103,6 +103,10 @@ See [LIMITATIONS](docs/LIMITATIONS.md). Implemented ceilings include 8 MiB appli
 read budgets, a 32 KiB serialized response frame, 500 lines, and a cooperative five-second
 whole-call deadline. Native all-path and performance verification remain open;
 synchronous kernel calls cannot be preempted by the deadline.
+An optional [tool-limits configuration](docs/CONFIGURATION-LIMITS.md) tightens read,
+line, tool-result frame and time allowances per instance; it cannot raise them.
+Catalog/control replies retain the global 32 KiB ceiling. Native configured-file
+verification of this new source is pending.
 Large continuously changing logs above 6 MiB may remain unavailable for the writer's
 lifetime; strict invalidation prioritizes correct generation/line evidence.
 The first exact 100 MB benchmark failed preparation before warm measurements;

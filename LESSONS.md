@@ -1,5 +1,9 @@
 # Lessons learned
 
+- Carry instance limits through admission, the engine, rendering and final SDK bytes.
+  Start the deadline before queueing; never reset it at execution. Bound tool-result
+  frames separately from catalog discovery and bind configuration changes to cache
+  generations/cursors. Test the actual pinned legacy and modern handshake methods.
 - Separate explicit whole-source preparation from interactive call budgets with
   finite documented bounds. Preserve failed timing attempts; later faster timings
   on shared hardware do not prove a causal speedup. Snapshot final/sweep memory

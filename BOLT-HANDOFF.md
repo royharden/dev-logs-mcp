@@ -65,8 +65,11 @@ oracle sweeps. This is query/renderer observation, separate from MCP SDK stdio
 latency. Explicit preparation uses one finite 120-second cooperative budget shared
 across at most two attempts; MCP calls/queue/auto-index remain five seconds.
 The earlier five-second preparation failures stay preserved. Process I/O is
-unavailable, final/sweep memory capture and configurable lower ceilings remain open,
-and the observation tuple awaits independent review. See [benchmark scope](docs/BENCHMARK.md)
+unavailable, and final/sweep memory was not captured in that run. Independent audit
+accepted the attributed observation tuple with notes, without runtime reproduction.
+The current source adds optional lower [tool limits](docs/CONFIGURATION-LIMITS.md)
+and a final-workload memory snapshot; native configured-file checks are pending,
+and the performance configuration grid remains open. See [benchmark scope](docs/BENCHMARK.md)
 for actual p95s, read amplification and hardware/measurement limits.
 
 Inspection prompt for a future Bolt import:

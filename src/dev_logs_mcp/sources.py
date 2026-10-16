@@ -80,6 +80,7 @@ class SourceCatalog:
         if not base.is_absolute() or ".." in base.parts:
             raise ReadFailure("CONFIG_INVALID")
         budget = budget or ReadBudget()
+        self.tool_limits = config.tool_limits
         roots = tuple(_absolute(base, root) for root in config.allowed_roots)
         sources: dict[str, Source] = {}
         # Validate authority lexically BEFORE any directory enumeration.

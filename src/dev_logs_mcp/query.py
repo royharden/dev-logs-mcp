@@ -7,9 +7,10 @@ import json
 import re
 import secrets
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
+from .config import ToolLimits
 from .contracts import (
     AUTO_INDEX_BYTES,
     ErrorsRequest,
@@ -102,9 +103,16 @@ def _failure(code: str, budget: ReadBudget | None = None) -> ToolEnvelope:
 class QueryResult:
     envelope: ToolEnvelope
     shrink: Callable[[int], ToolEnvelope] | None = None
+    limits: ToolLimits | None = None
 
     def render(self, request_id: int | str, budget: OutputBudget | None = None) -> RenderedResponse:
-        return (budget or OutputBudget()).render(self.envelope, request_id, self.shrink)
+        selected = budget or OutputBudget()
+        if self.limits is not None:
+            selected = OutputBudget(
+                max_lines=min(selected.max_lines, self.limits.lines),
+                max_wire_bytes=min(selected.max_wire_bytes, self.limits.frame_bytes),
+            )
+        return selected.render(self.envelope, request_id, self.shrink)
 
 
 @dataclass(frozen=True)
@@ -134,6 +142,7 @@ class LogEngine:
         cache: PrivateIndexCache | None = None,
     ):
         self.catalog = catalog
+        self.tool_limits = catalog.tool_limits
         self.redactor = redactor or Redactor(custom_rules=getattr(catalog, "custom_rules", ()))
         self.cache = cache
         self.cursors = Cursors()
@@ -201,9 +210,15 @@ class LogEngine:
     def call(
         self, tool: str, arguments: dict[str, object], *, budget: ReadBudget | None = None
     ) -> QueryResult:
-        budget = budget or ReadBudget()
-        if budget.max_bytes > MAX_READ_BYTES:
-            raise ValueError("tool calls cannot raise the all-path read ceiling")
+        limits = self.tool_limits
+        budget = budget or ReadBudget(limits.read_bytes, seconds=limits.seconds)
+        if budget.max_bytes > limits.read_bytes:
+            raise ValueError("tool calls cannot raise the configured read ceiling")
+        # An injected budget may tighten, never extend the same queue+call origin.
+        budget.deadline = min(budget.deadline, budget.started_at + limits.seconds)
+        return replace(self._call(tool, arguments, budget), limits=limits)
+
+    def _call(self, tool: str, arguments: dict[str, object], budget: ReadBudget) -> QueryResult:
         try:
             request = validate_request(tool, arguments)
             budget.check()

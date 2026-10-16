@@ -16,7 +16,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
-from dev_logs_mcp.config import AppConfig
+from dev_logs_mcp.config import AppConfig, ToolLimits
 from dev_logs_mcp.contracts import AUTO_INDEX_BYTES
 from dev_logs_mcp.index import PrivateIndexCache, ReadFailure
 from dev_logs_mcp.query import LogEngine
@@ -406,9 +406,10 @@ def main():
                 "model_calls": 0,
                 "mode": "native-source-inprocess-renderer-not-SDK-wire",
                 "ceilings": {"read_bytes": MAX_READ_BYTES, "frame_bytes": MAX_FRAME_BYTES},
+                "default_tool_limits": ToolLimits().model_dump(),
                 "configuration_grid": (
-                    "Fixed application ceilings; default/maximum request parameters only. "
-                    "Configurable lower ceilings not implemented/qualified."
+                    "Default application limits; profiles vary request parameters only. "
+                    "Lower AppConfig limits exist but this benchmark does not exercise their grid."
                 ),
                 "measurement_limits": (
                     "os.read observes actual source/index/cache Python reads, "
@@ -461,6 +462,12 @@ def main():
                 "failures": failures,
                 "required_size_and_repeats": args.size_bytes == 100_000_000 and args.repeats == 30,
                 "configuration_tightening_qualified": False,
+                "final_workload_observation": process_observation(),
+                "final_snapshot_scope": (
+                    "After all benchmark workloads and generated-fixture cleanup, "
+                    "before final-record serialization; global high-water marks, "
+                    "not per-call allocations or later harness/container teardown."
+                ),
                 "qualification": False,
                 "whole_app_accepted": False,
             }

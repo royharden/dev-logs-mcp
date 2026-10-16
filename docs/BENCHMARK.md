@@ -25,8 +25,8 @@ records, recorded source hashes and known physical-line/match denominators. It r
 - Thirty warm calls per tool, format and request profile, retaining failed calls in
   nearest-rank p50/p95 latency calculations. Empty measurements remain unknown.
 - Default and maximum **request parameters**. List-sources/errors use identical
-  fixed parameters in both profiles. Configurable lower application ceilings are
-  not implemented or qualified; this is not the complete planned configuration grid.
+  fixed parameters in both profiles. The optional lower [application limits](CONFIGURATION-LIMITS.md)
+  are not exercised here; this is not the complete planned configuration grid.
 - Match and no-match source-pagination totals, unique-cursor checks, expected match
   counts, page/read costs and explicit incomplete/failure outcomes.
 - Actual Python `os.read` return counts, application-reported reads, rendered output
@@ -111,8 +111,18 @@ Hardware context: shared Intel Core i7-12700H Windows/Docker Desktop host,
 the host. The job had one CPU quota, 512 MiB/64 PID bounds, read-only root/source/
 wheels, generated-only tmpfs and no network, ports or persistent volumes. Hardware
 was not exclusive. The owned job completed in 291.359s, exited without OOM,
-was removed and released its ledger claim. Exact observation review is pending.
+was removed and released its ledger claim. Independent read-only audit accepted
+the attributed observations with notes: 632 metric records, 77 focused JUnit cases,
+20 warm groups of 30 distinct IDs within each group, and 20 quantile rows agree.
+IDs repeat across groups. The reviewer did not execute the application, Docker or
+benchmark, or regenerate the 200 MB input bodies. This is audited attribution,
+not independent runtime reproduction or application acceptance.
 
 The configurable-limit grid, complete process I/O/final memory capture, native
 production preemption, sustained stress, Windows, evaluation and full application
 acceptance remain open. No scanner or model was invoked by this benchmark.
+
+The current script additionally emits a final workload memory snapshot after sweeps
+and generated-fixture cleanup, before final record serialization. This source change
+does not supply the missing final/sweep peaks for the frozen run above. Its small
+smoke control and future observations must retain their own exact source identity.

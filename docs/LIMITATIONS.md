@@ -48,7 +48,9 @@
   physical-coordinate sweeps. This is in-process query/renderer observation, not
   captured stdio latency or full performance qualification. Raw process I/O is
   unavailable with FileNotFoundError/errno 2, final/sweep memory peaks are not
-  emitted, and configurable lower ceilings remain unimplemented. Total sparse
+  emitted in that run. Optional lower [tool limits](CONFIGURATION-LIMITS.md) now
+  exist in source but native configured-file verification and the performance grid
+  remain pending. Total sparse
   match/no-match reads were 836,100,352/192,274,688 bytes per 100 MB source despite
   bounded pages. See [benchmark scope](BENCHMARK.md).
 - The 8 MiB application read budget, 32 KiB full serialized response cap, and cooperative

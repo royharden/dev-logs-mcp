@@ -7,8 +7,28 @@ from pydantic import Field, model_validator
 
 from dev_logs_mcp.contracts import MAX_SOURCES, BoundaryModel, SourceId
 from dev_logs_mcp.parse import source_timezone
-from dev_logs_mcp.shared.mcpkit.errors import MAX_CUSTOM_RULES, MAX_PATTERN_BYTES
+from dev_logs_mcp.shared.mcpkit.errors import (
+    CALL_DEADLINE_SECONDS,
+    MAX_CUSTOM_RULES,
+    MAX_FRAME_BYTES,
+    MAX_LINES,
+    MAX_PATTERN_BYTES,
+    MAX_READ_BYTES,
+)
 from dev_logs_mcp.shared.mcpkit.redact import CustomRule, Redactor
+
+MIN_TOOL_FRAME_BYTES = 8192
+
+
+class ToolLimits(BoundaryModel):
+    """Lower-only call limits. Catalog/control frames retain the global ceiling."""
+
+    read_bytes: int = Field(default=MAX_READ_BYTES, ge=1, le=MAX_READ_BYTES)
+    lines: int = Field(default=MAX_LINES, ge=1, le=MAX_LINES)
+    frame_bytes: int = Field(default=MAX_FRAME_BYTES, ge=MIN_TOOL_FRAME_BYTES, le=MAX_FRAME_BYTES)
+    seconds: float = Field(
+        default=float(CALL_DEADLINE_SECONDS), gt=0, le=CALL_DEADLINE_SECONDS, allow_inf_nan=False
+    )
 
 
 class DetectorConfig(BoundaryModel):
@@ -53,6 +73,7 @@ class AppConfig(BoundaryModel):
     allowed_roots: list[str] = Field(min_length=1, max_length=MAX_SOURCES)
     sources: list[SourceConfig] = Field(min_length=1, max_length=MAX_SOURCES)
     redaction_rules: list[DetectorConfig] = Field(default_factory=list, max_length=MAX_CUSTOM_RULES)
+    tool_limits: ToolLimits = Field(default_factory=ToolLimits)
 
     @model_validator(mode="after")
     def unique_source_ids(self):

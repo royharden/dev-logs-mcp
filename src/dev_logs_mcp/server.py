@@ -15,6 +15,7 @@ from mcp.server.stdio import _claim_fd, _open_stdin_diversion, _open_stdout_dive
 from mcp.shared.exceptions import MCPError
 
 from . import __version__
+from .config import MIN_TOOL_FRAME_BYTES, ToolLimits
 from .contracts import REQUEST_MODELS, validate_request
 from .index import ReadBudget, ReadFailure
 from .query import LogEngine, _failure
@@ -91,14 +92,15 @@ def exported_tools() -> list[dict]:
 class CallGate:
     """FIFO4 running +16 waiting. Queue time consumes the same5second budget."""
 
-    def __init__(self):
+    def __init__(self, limits: ToolLimits | None = None):
+        self.limits = limits or ToolLimits()
         self.active = 0
         self.queue = deque()
         self.condition = asyncio.Condition()
 
     @asynccontextmanager
     async def enter(self):
-        budget = ReadBudget()
+        budget = ReadBudget(self.limits.read_bytes, seconds=self.limits.seconds)
         ticket = object()
         admitted = False
         async with self.condition:
@@ -137,12 +139,17 @@ class CallGate:
 
 def create_server(engine: LogEngine) -> Server:
     catalog = exported_tools()
-    gate = CallGate()
+    limits = engine.tool_limits
+    gate = CallGate(limits)
     workers = anyio.CapacityLimiter(MAX_ACTIVE_CALLS)
 
     def pack(result, request_id):
         rendered = result.render(
-            request_id, OutputBudget(max_wire_bytes=MAX_FRAME_BYTES - SDK_RESERVE_BYTES)
+            request_id,
+            OutputBudget(
+                max_lines=limits.lines,
+                max_wire_bytes=limits.frame_bytes - SDK_RESERVE_BYTES,
+            ),
         )
         payload = rendered.envelope.model_dump(mode="json", exclude_none=True)
         mirror = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
@@ -214,8 +221,14 @@ class _BoundedInput:
 
 
 class _BoundedOutput:
-    def __init__(self, buffer):
+    def __init__(self, buffer, *, tool_frame_bytes: int = MAX_FRAME_BYTES):
+        if (
+            type(tool_frame_bytes) is not int
+            or not MIN_TOOL_FRAME_BYTES <= tool_frame_bytes <= MAX_FRAME_BYTES
+        ):
+            raise ValueError("invalid tool frame ceiling")
         self.buffer = buffer
+        self.tool_frame_bytes = tool_frame_bytes
 
     async def write(self, value: str):
         # This is the SDK's final model_dump_json serialization plus newline.
@@ -227,7 +240,10 @@ class _BoundedOutput:
         request_id = frame.get("id")
         if "id" in frame and request_id is not None and not _request_id_is_bounded(request_id):
             raise ProtocolBudgetError("outgoing request ID violates bounded policy")
-        if "error" in frame or len(raw) > MAX_FRAME_BYTES:
+        result = frame.get("result")
+        is_tool_reply = isinstance(result, dict) and "structuredContent" in result
+        limit = self.tool_frame_bytes if is_tool_reply else MAX_FRAME_BYTES
+        if "error" in frame or len(raw) > limit:
             code = frame.get("error", {}).get("code", types.INTERNAL_ERROR)
             if type(code) is not int or code not in {
                 types.INVALID_PARAMS,
@@ -248,7 +264,7 @@ class _BoundedOutput:
                 },
             }
             raw = json.dumps(frame, separators=(",", ":"), ensure_ascii=False).encode() + b"\n"
-        if len(raw) > MAX_FRAME_BYTES:
+        if len(raw) > limit:
             raise ProtocolBudgetError("outgoing frame exceeds policy")
 
         def write_all():
@@ -273,7 +289,10 @@ async def serve(engine: LogEngine) -> None:
     outgoing = restore_out = None
     try:
         outgoing, restore_out = _claim_fd(1, sys.stdout, "wb", _open_stdout_diversion)
-        async with stdio_server(stdin=_BoundedInput(incoming), stdout=_BoundedOutput(outgoing)) as (
+        async with stdio_server(
+            stdin=_BoundedInput(incoming),
+            stdout=_BoundedOutput(outgoing, tool_frame_bytes=engine.tool_limits.frame_bytes),
+        ) as (
             reader,
             writer,
         ):

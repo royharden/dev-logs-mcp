@@ -10,6 +10,7 @@ import pytest
 from mcp import Client, ClientSession, StdioServerParameters, stdio_client
 from mcp.shared.exceptions import MCPError
 
+from dev_logs_mcp.config import ToolLimits
 from dev_logs_mcp.server import CallGate, exported_tools
 from dev_logs_mcp.shared.mcpkit.tools_json import ANNOTATIONS
 
@@ -171,13 +172,11 @@ def test_cancelled_queued_call_does_not_leak_ticket():
     asyncio.run(exercise())
 
 
-def test_queue_expiry_returns_busy_without_leaking_admission(monkeypatch):
-    from dev_logs_mcp.index import ReadBudget, ReadFailure
-
-    monkeypatch.setattr("dev_logs_mcp.server.ReadBudget", lambda: ReadBudget(seconds=0.02))
+def test_queue_expiry_returns_busy_without_leaking_admission():
+    from dev_logs_mcp.index import ReadFailure
 
     async def exercise():
-        gate = CallGate()
+        gate = CallGate(ToolLimits(seconds=0.02))
         release = asyncio.Event()
 
         async def held():

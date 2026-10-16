@@ -66,7 +66,8 @@ class ReadBudget:
         self.max_bytes = max_bytes
         self.bytes_read = 0
         self.clock = clock
-        self.deadline = clock() + seconds
+        self.started_at = clock()
+        self.deadline = self.started_at + seconds
 
     @property
     def remaining(self) -> int:

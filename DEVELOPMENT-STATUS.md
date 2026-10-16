@@ -13,6 +13,9 @@ Existing proposals and metadata observations do not establish successful executi
   private cache support, authenticated cursors and bounded response serialization.
 - Queue/concurrency controls and cooperative deadlines; error/refusal envelopes.
   Windows data access deliberately fails closed while safety guarantees are missing.
+- Optional lower-only instance limits for reads, physical evidence lines, tool-result
+  frames and queue-plus-call time. Strict defaults preserve global ceilings;
+  catalog/control frames retain 32 KiB. See [configuration](docs/CONFIGURATION-LIMITS.md).
 - Reusable core models, redaction, matcher, output/schema/style helpers and an
   injectable conformance runner. Application compatibility assertions now live in
   the application suite so the portable tests do not import the owning app.
@@ -158,7 +161,7 @@ Existing proposals and metadata observations do not establish successful executi
   and four sweeps. Both exact 100 MB inputs then failed five-second explicit
   preparation with INDEX_INCOMPLETE, so no required warm repeat or sweep ran.
   Process I/O was unavailable (null), not measured zero. Its profiles vary request parameters;
-  configurable lower application ceilings remain an explicit unimplemented gap.
+  its fixed request profiles did not exercise configurable lower application ceilings.
   A correction gives explicit preparation a separate bounded 120 seconds across
   retries, retaining five-second MCP calls/auto-index. Seventy-seven focused
   query/index/benchmark controls passed in the new native job at raw-Git commit
@@ -167,9 +170,16 @@ Existing proposals and metadata observations do not establish successful executi
   observed read/frame failures. Warm in-process tail/search p95 observations met
   reference targets in each request profile. Process I/O remains null with errno 2;
   final/sweep memory peaks and the configurable-limit grid remain unqualified.
-  This 291.359s job was removed/released. Independent observation review is pending;
+  This 291.359s job was removed/released. Independent read-only audit accepted the
+  attributed observations with notes, without product/Docker/benchmark execution;
   it is not stdio latency or production qualification. See [benchmark scope](docs/BENCHMARK.md)
   for generated tables, repeated-read costs, failed predecessors and exact boundaries.
+- Current lower-limit construction passed strict scalar/default/hash/query/clock
+  controls and captured real SDK stdio using explicit synthetic-memory storage.
+  Prepared native configured-file controls remain unexecuted; those unit/wire
+  results do not clear Linux, Windows or full-app gates. A failed first wire fixture
+  used the wrong initialization method for the SDK protocol version; its corrected
+  legacy/modern handshakes passed, with the failed attempt retained separately.
 
 ## Outstanding work
 
@@ -187,8 +197,8 @@ Existing proposals and metadata observations do not establish successful executi
    guard controls. Extend outside-root and complete
    budget/conformance coverage; synthetic transport faults and vendor analyzer
    controls are not those application mutations.
-6. Obtain independent review of the corrected-preflight/100 MB observations; finish
-   the configurable-limit grid, process-I/O availability, final memory peaks and
+6. Complete native lower-limit configured-file checks and independent review; finish
+   the performance configuration grid, process-I/O availability, final memory peaks and
    production-bound/performance qualification. Preserve failed predecessors and raw costs.
 7. Complete full detached consumption and CI beyond the exact local packaging subset. Standard test
    collection includes the shared-core suite; its native execution gates remain open.

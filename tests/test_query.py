@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from dev_logs_mcp.config import ToolLimits
 from dev_logs_mcp.index import ReadBudget, ReadFailure
 from dev_logs_mcp.query import Cursors, LogEngine
 from dev_logs_mcp.shared.mcpkit.bounded_output import OutputBudget
@@ -18,6 +19,7 @@ class FakeCatalog:
     """Explicitly injected in-memory storage; production SourceCatalog is untouched."""
 
     config_hash = "a" * 64
+    tool_limits = ToolLimits()
 
     def __init__(self, data):
         self.data = data
