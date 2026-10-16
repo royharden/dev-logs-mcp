@@ -111,7 +111,11 @@ Existing proposals and metadata observations do not establish successful executi
   actual coverage was YARA 10/10, readiness 5/5 and prompt-defense 5/5, zero analyzer
   errors. Real positive controls and a deliberately raising analyzer verified the
   completion guard. The scan returned 95 findings (2/40/53); all have named author
-  dispositions awaiting independent review/INT decision, with zero automatic waivers.
+  dispositions. Independent review and integration disposition accepted the exact
+  evidence and 24 narrow classifications with notes. All 95 findings, including
+  32 HIGH and both credential HIGH findings, remain addressable with zero automatic
+  waivers. Native deadline/process I/O-memory-latency/stress, secrecy, frequency,
+  observability and external-caller prompt risks remain named work.
   Earlier setup/verifier failures remain preserved. The successful run took 97.75s;
   its owned container was removed and resource claim released. See
   [security scan](docs/SECURITY-SCAN.md). Later documentation does not relabel its tree.
@@ -129,9 +133,9 @@ Existing proposals and metadata observations do not establish successful executi
   has executed; private fixture material is not part of this repository.
 - The scorer and methods need an actual controller binding source hashes, input
   normalization, implementation/configuration digests, captures and exposure history.
-- The completed definitions-only scanner has proposed dispositions for all 95 findings.
-  Independent finding review and review of the four native application controls
-  remain outstanding; those controls are separate from vendor analyzer controls.
+- The completed definitions-only scanner has accepted narrow dispositions for all
+  95 findings with retained risks. Independent review of the four native application
+  controls remains outstanding; those controls are separate from vendor analyzer controls.
 - Shared source has a detached portable-core check; native path, full application,
   complete consumer and downstream adoption evidence remain separate.
 
@@ -146,8 +150,8 @@ Existing proposals and metadata observations do not establish successful executi
    safety cache still lacks MCP/RE2; the successful run used a separate fresh tuple.
 4. Complete controller metadata and freeze actual methods/configuration before any
    authorized development or held-out campaign. Preserve all misses/errors/abstentions.
-5. Resolve independent review/INT disposition of all 95 completed scanner findings
-   and the four native application guard controls. Extend outside-root and complete
+5. Address retained scanner risks and independent review of the four native
+   application guard controls. Extend outside-root and complete
    budget/conformance coverage; synthetic transport faults and vendor analyzer
    controls are not those application mutations.
 6. Run the specified 100,000,000-byte plain/JSONL benchmarks with actual read, output,

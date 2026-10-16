@@ -26,8 +26,10 @@
   A detached pure-core/synthetic-conformance subset passed with the owner app and MCP
   SDK imports blocked, using existing dependencies. It did not execute native path tests.
 - The optional Cisco 4.8.6 keyless static scan completed all analyzer calls but returned
-  95 findings. All named author dispositions remain independent-review/INT pending;
-  no automatic waiver or clean-security claim is made. Definitions-only heuristics
+  95 findings. Independent review accepted exact evidence and 24 narrow classifications
+  with notes; all 95 findings, including 32 HIGH and both credential HIGH findings,
+  remain addressable with named residual risks. No automatic waiver or clean-security
+  claim is made. Definitions-only heuristics
   do not qualify server behavior, dependencies for CVEs or an external agent's prompt
   robustness. See [security scan](SECURITY-SCAN.md).
 - Large files above 6 MiB require a stable explicit index. Any change invalidates the

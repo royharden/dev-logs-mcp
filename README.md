@@ -77,8 +77,9 @@ references. Its toy controls cover evidence binding and fixed-denominator accoun
 corpus enrichment, actual campaign execution and controller provenance remain pending.
 
 The optional [offline security scan](docs/SECURITY-SCAN.md) completed all five public
-tool definitions with Cisco MCP Scanner 4.8.6 and reported 95 findings. Named author
-dispositions await independent review; completion is not a clean-security result.
+tool definitions with Cisco MCP Scanner 4.8.6 and reported 95 findings. Independent
+review accepted the exact evidence and 24 narrow classifications with notes. All
+95 findings and their residual risks remain visible; this is not a clean-security result.
 Its isolated developer environment is separate from the application's dependencies.
 
 ## Cost

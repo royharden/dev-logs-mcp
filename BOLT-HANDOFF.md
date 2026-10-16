@@ -44,8 +44,9 @@ Passing refusal regressions does not establish release readiness.
 
 An optional developer security check uses a separate pinned Linux/Python 3.12 scanner
 environment. Cisco MCP Scanner 4.8.6 completed the exported five-tool definitions in
-a fresh offline container, reporting 95 findings. The named author dispositions remain
-review-pending; no clean-security, application-sabotage or full-app result follows.
+a fresh offline container, reporting 95 findings. Independent review accepted the
+exact evidence and 24 narrow classifications with notes, retaining all 95 findings
+and named residual risks. No clean-security, application-sabotage or full-app result follows.
 See [security scan](docs/SECURITY-SCAN.md) for reproduction and scope. Application
 dependencies and deterministic runtime remain separate from this optional toolchain.
 
