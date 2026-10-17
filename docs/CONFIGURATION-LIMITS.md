@@ -52,6 +52,12 @@ namespaces/generations/cursors change when a limit changes. Adding default limit
 fields also changes fingerprints from the earlier implementation; prepare large
 sources again after upgrading. Existing cache files are not silently reinterpreted.
 
+Index cache schema 2 also rejects schema 1 checkpoints with `INDEX_STALE`: those
+checkpoints can retain the previous event's metadata across an invalid plain-log
+date. Run `index-source` again for a source with an older cache. ISO-shaped plain
+records with invalid dates now have no timestamp, retain their own recognized
+severity, and start a new event; time filters exclude their untimestamped evidence.
+
 Strict configuration/query controls and actual SDK stdio with synthetic memory have
 run. At raw-Git source `761139557b6a06281e4969bc8a17d95e5973b4ff`, five required
 configured-file controls also passed on Linux CPython 3.12.13/glibc 2.36/x86-64:

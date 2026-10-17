@@ -118,11 +118,13 @@ def parse_line(
     elif format in {"auto", "plain_iso"}:
         match = _ISO.match(text)
         if match:
+            # An ISO-shaped header establishes a new event even if its date is
+            # invalid. Parse severity independently, as for JSON metadata.
+            header = True
+            severity = _LEVEL.match(text[match.end() :])
+            level = _level(severity[1]) if severity else None
             try:
                 timestamp = normalize_time(match[1], zone)
-                header = True
-                severity = _LEVEL.match(text[match.end() :])
-                level = _level(severity[1]) if severity else None
             except ValueError:
                 fallback = True
         elif format == "plain_iso":

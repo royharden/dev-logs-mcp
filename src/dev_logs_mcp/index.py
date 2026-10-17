@@ -29,6 +29,8 @@ CHUNK_BYTES = 1024 * 1024
 MAX_SOURCE_BYTES = 1024 * 1024 * 1024
 MAX_INDEX_LINES = 262144
 MAX_CACHE_BYTES = 4 * 1024 * 1024
+# Version1 checkpoints may inherit prior event metadata across invalid plain dates.
+INDEX_SCHEMA_VERSION = 2
 _LEVELS = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL", "CRITICAL"}
 _HEX = frozenset("0123456789abcdef")
 
@@ -149,7 +151,7 @@ class GenerationIndex:
 
     def encode(self) -> bytes:
         body = {
-            "schema": 1,
+            "schema": INDEX_SCHEMA_VERSION,
             "source_id": self.source_id,
             "config_hash": self.config_hash,
             "identity": asdict(self.identity),
@@ -188,7 +190,7 @@ class GenerationIndex:
                     "checkpoints",
                 }
                 or type(body["schema"]) is not int
-                or body["schema"] != 1
+                or body["schema"] != INDEX_SCHEMA_VERSION
             ):
                 raise ValueError
             if body["source_id"] != source_id or body["config_hash"] != config_hash:

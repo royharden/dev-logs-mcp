@@ -216,6 +216,40 @@ def test_errors_count_headers_only_group_volatile_ids_and_trace():
     assert [line.line_no for line in page.groups[0].trace] == [2]
 
 
+@pytest.mark.parametrize("format", ["auto", "plain_iso"])
+@pytest.mark.parametrize("severity", ["WARN", "INFO"])
+def test_invalid_plain_date_is_not_previous_error_or_time_filtered_evidence(format, severity):
+    """what_bug_this_catches: bad-date events must not borrow prior severity/time in tools."""
+    subject = engine(
+        b"2026-01-01T00:00:00Z ERROR first event\n"
+        + f"2026-02-31T00:00:00Z {severity} later event\n  later trace\n".encode()
+    )
+    subject.catalog.source.format = format
+    for tool, args in (
+        ("tail", {"source_id": "web"}),
+        ("read_range", {"source_id": "web", "start_line": 1, "end_line": 3}),
+    ):
+        page = subject.call(tool, args).envelope
+        assert page.ok
+        later, trace = page.lines[1:]
+        assert later.line_no == 2 and later.timestamp is None and later.level == severity
+        assert not later.timestamp_inherited and not later.level_inherited
+        assert trace.line_no == 3 and trace.timestamp is None and trace.level == severity
+        assert not trace.timestamp_inherited and trace.level_inherited
+    grouped = subject.call("errors", {"source_id": "web"}).envelope
+    assert grouped.ok
+    expected_headers = {1, 2} if severity == "WARN" else {1}
+    assert {group.first_in_coverage.line_no for group in grouped.groups} == expected_headers
+    first = next(group for group in grouped.groups if group.first_in_coverage.line_no == 1)
+    assert first.trace == []
+    filtered = subject.call(
+        "search",
+        {"source_id": "web", "pattern": "later", "context": 0, "since": "2026-01-01T00:00:00Z"},
+    ).envelope
+    assert filtered.ok and filtered.matches == []
+    assert filtered.coverage.excluded_untimestamped == 2 and filtered.coverage.complete
+
+
 def test_large_cold_source_refused_before_any_data_read():
     subject = engine(b"not actually large")
     subject.catalog.size_override = 6 * 1024 * 1024 + 1

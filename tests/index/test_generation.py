@@ -224,6 +224,38 @@ def test_cache_has_no_raw_secret_or_path_and_generation_binds_config():
     assert replace(index, config_hash="b" * 64).generation_id != index.generation_id
 
 
+def test_legacy_parser_checkpoint_cache_requires_reindex():
+    """what_bug_this_catches: valid-checksum old caches can retain incorrect event metadata."""
+    _, index, _, _ = make_index(b"synthetic\n")
+    value = json.loads(index.encode())
+    value["index"]["schema"] = 1
+    value["sha256"] = hashlib.sha256(
+        json.dumps(
+            value["index"], ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode()
+    ).hexdigest()
+    with pytest.raises(ReadFailure) as error:
+        GenerationIndex.decode(json.dumps(value).encode(), "web", CONFIG)
+    assert error.value.code == "INDEX_STALE"
+
+
+def test_invalid_plain_date_checkpoint_roundtrip_preserves_current_record_only():
+    """what_bug_this_catches: a random window at a checkpoint must not revive prior ERROR/time."""
+    data = (
+        b"2026-01-01T00:00:00Z ERROR first\n"
+        + b"  prior trace\n" * 254
+        + b"2026-02-31T00:00:00Z WARN current\n  current trace\n"
+    )
+    handle, index, redactor, _ = make_index(data)
+    decoded = GenerationIndex.decode(index.encode(), "web", CONFIG)
+    assert decoded.checkpoint(257).line_no == 257
+    lines = VerifiedWindow(handle, decoded, ReadBudget()).lines(257, 257, redactor)
+    assert len(lines) == 1
+    line = lines[0].line
+    assert line.line_no == 257 and line.timestamp is None and line.level == "WARN"
+    assert not line.timestamp_inherited and line.level_inherited
+
+
 def test_index_line_allocation_ceiling_is_enforced(monkeypatch):
     monkeypatch.setattr("dev_logs_mcp.index.MAX_INDEX_LINES", 3)
     with pytest.raises(ReadFailure) as error:

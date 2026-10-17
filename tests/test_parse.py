@@ -97,6 +97,24 @@ def test_metadata_cannot_echo_arbitrary_json_fields():
     assert result.state == ParseState()
 
 
+@pytest.mark.parametrize("format", ["auto", "plain_iso"])
+@pytest.mark.parametrize(
+    "timestamp", ["2026-02-31T00:00:00Z", "2026-01-01T25:00:00Z", "2026-00-01T00:00:00Z"]
+)
+@pytest.mark.parametrize("severity,expected", [("WARN", "WARN"), ("UNKNOWN", None)])
+def test_invalid_plain_timestamp_starts_its_own_record(format, timestamp, severity, expected):
+    """what_bug_this_catches: malformed plain dates cannot inherit a prior ERROR event."""
+    raw = f"{timestamp} {severity} synthetic event"
+    result = parse_line(raw, ParseState("2026-01-01T00:00:00Z", "ERROR"), format=format)
+    assert result.state == ParseState(None, expected)
+    assert result.fallback and not result.timestamp_inherited and not result.level_inherited
+    assert result.text == raw
+    following = parse_line("  synthetic continuation", result.state, format=format)
+    assert following.state == ParseState(None, expected)
+    assert not following.timestamp_inherited
+    assert following.level_inherited == (expected is not None)
+
+
 def test_bounded_input_rejects_oversize_and_bad_format():
     for raw, fmt in [("x" * 65537, "auto"), ("é" * 32769, "auto"), ("normal", "unknown")]:
         with pytest.raises(ValueError, match="bounded supported"):
