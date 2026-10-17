@@ -5,7 +5,9 @@ import json
 import os
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -64,6 +66,51 @@ def test_demo_exception_report_keeps_completed_checks(demo_module, monkeypatch, 
     assert report["failure_codes"] == ["TimeoutError"]
     assert "private-group-body" not in captured.out + captured.err
     assert "private-child-body" not in captured.out + captured.err
+
+
+def test_demo_later_timeout_keeps_each_completed_refusal(demo_module, monkeypatch, capsys):
+    """what_bug_this_catches: a later timeout cannot erase an earlier required operation refusal."""
+
+    @asynccontextmanager
+    async def stdio(*_args, **_kwargs):
+        yield None, None
+
+    class Session:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def initialize(self):
+            pass
+
+        async def list_tools(self):
+            return SimpleNamespace(tools=[SimpleNamespace(name=name) for name in demo_module.TOOLS])
+
+        async def call_tool(self, name, _arguments):
+            if name == "search":
+                raise TimeoutError("synthetic-private-timeout-body")
+            return {
+                "ok": name == "list_sources",
+                "sources": [{"id": "plain"}, {"id": "jsonl"}],
+                "coverage": {"bytes_read": 0},
+                "error": {} if name == "list_sources" else {"code": "SOURCE_NOT_LOCAL"},
+            }
+
+    monkeypatch.setattr(demo_module, "stdio_client", stdio)
+    monkeypatch.setattr(demo_module, "ClientSession", lambda *_args, **_kwargs: Session())
+    # Exercise actual orchestration with synthetic SDK values; no transport/validation claim.
+    monkeypatch.setattr(demo_module, "validate_result", lambda result, _secret: (result, 64))
+    assert demo_module.main() == 2
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert [call["tool"] for call in report["calls"]] == ["list_sources", "errors"]
+    assert report["calls"][-1]["error_code"] == "SOURCE_NOT_LOCAL"
+    assert report["required_failures"] == ["SOURCE_NOT_LOCAL"]
+    assert report["status"] == report["normal_journey"] == "failed"
+    assert report["failure_codes"] == ["TimeoutError"]
+    assert "synthetic-private-timeout-body" not in captured.out + captured.err
 
 
 def test_demo_fixture_setup_error_keeps_failed_report(demo_module, monkeypatch, capsys):

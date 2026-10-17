@@ -185,9 +185,9 @@ async def exercise(root: Path, report: dict) -> dict:
                         ("tail", {"lines": 500}),
                     ):
                         responses[name] = await call(name, {"source_id": source, **arguments})
-                    refused = [p["error"]["code"] for p in responses.values() if not p["ok"]]
-                    if refused:
-                        failures.extend(refused)
+                        if not responses[name]["ok"]:
+                            failures.append(responses[name]["error"]["code"])
+                    if any(not response["ok"] for response in responses.values()):
                         continue
                     for name in ("errors", "search", "read_range"):
                         require(
