@@ -120,9 +120,8 @@ def outside_root_refusal(root: Path, secret: str) -> dict:
     return {"check": "outside_root_configuration", "refused": True, "code": "CONFIG_INVALID"}
 
 
-async def exercise(root: Path) -> dict:
-    config, secret = generate(root)
-    report = {
+def initial_report() -> dict:
+    return {
         "schema_version": 1,
         "mode": "mock",
         "transport": "real_cli_stdio",
@@ -131,16 +130,21 @@ async def exercise(root: Path) -> dict:
         "normal_journey": "pending",
         "checks": [],
         "calls": [],
+        "required_failures": [],
         "limits": [
             "Result sizes exclude the JSON-RPC wrapper; full-wire guards have separate tests.",
             "Synthetic demonstration is not platform qualification or release acceptance.",
         ],
     }
+
+
+async def exercise(root: Path, report: dict) -> dict:
+    config, secret = generate(root)
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "dev_logs_mcp", "serve", str(config)],
     )
-    failures = []
+    failures = report["required_failures"]
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr:
         async with stdio_client(params, errlog=stderr) as (reader, writer):
             async with ClientSession(reader, writer, read_timeout_seconds=15) as client:
@@ -264,23 +268,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=["mock"], default="mock")
     parser.parse_args()
+    report = initial_report()
     generated = REPO / "fixtures" / "generated" / "demos"
-    generated.mkdir(parents=True, exist_ok=True)
     try:
+        generated.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="stdio-", dir=generated) as directory:
-            report = asyncio.run(exercise(Path(directory)))
+            report = asyncio.run(exercise(Path(directory), report))
     except Exception as error:
         # SDK exception groups/validation reprs may contain raw tool data.
-        print(
-            json.dumps(
-                {
-                    "status": "failed",
-                    "normal_journey": "failed",
-                    "error": "Configured-source demo could not complete safely",
-                    "failure_codes": failure_codes(error),
-                }
-            )
+        report.update(
+            status="failed",
+            normal_journey="failed",
+            error="Configured-source demo could not complete safely",
+            failure_codes=failure_codes(error),
         )
+        print(json.dumps(report, sort_keys=True))
         return 2
     print(json.dumps(report, sort_keys=True))
     return 0 if report["status"] == "passed" else 3
