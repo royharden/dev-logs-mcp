@@ -70,3 +70,25 @@ reply cannot be recorded, and source/receipt binding. Corpus metadata remains
 `needs_owner_metadata` until actual owner enrichment is available. Do not invent
 history, rewrite sealed labels, follow private provenance paths, or run heldout
 from the tuner process. No corpus or provider is acquired by this package.
+
+`evaluation.admission.evaluate_from_corpus` adds an explicit private-input entry
+over the same controller. The caller supplies a `CorpusAdmission` with the exact
+controller pins, split, source-binding digest, public-input digest and available
+checksum-bearing corpus rights/authority references. Each `SourceBinding` pins
+the source reference, manifest artifact namespace, split and rights/authority
+references. These are caller declarations, not authentication or independently
+verified permission. The caller must authorize the exact corpus root/split before
+calling; provenance reference paths are never followed.
+
+The adapter reuses canonical `load_corpus` for the original JSONL byte hash,
+bounded parsing, order, membership and domain checks. It hashes immutable source
+snapshots already acquired by the caller, joins their hashes and exact case
+membership to manifest artifacts, and rejects missing/extra bindings. Both DEV
+and heldout must be nonempty with disjoint groups and source bytes. This validates
+declared partition isolation, not semantic independence of generated families.
+Default execution stays not-run. Heldout requires the existing admission/history
+ports, and canonical controller checks still apply. No durable history store,
+campaign, corpus generator, native source reader, CLI campaign loader or Windows
+access capability is added. Verified supplied snapshots do not attest that a
+transport consumed those same bytes; actual capture provenance and process
+bounds remain the caller's responsibility.
