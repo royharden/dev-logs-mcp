@@ -1,9 +1,10 @@
 # Deterministic incident evaluation
 
-The `evaluation` package implements the S1 domain adapter and three fixed tool
-methods. Its current checks use original toy response transports. Independently
-sealed DEV and heldout campaigns, source acquisition, canonical enrichment and
-controller provenance are separate work; no diagnosis score is established yet.
+The `evaluation` package implements the S1 domain adapter, three fixed tool
+methods and an in-memory controller using canonical evalkit comparison/reporting.
+Its current checks use original handcrafted response transports. Independently
+sealed DEV and heldout campaigns, source acquisition and canonical enrichment
+remain separate work; no diagnosis score is established yet.
 
 Every method receives the same public source alias and symptom hint. Gold
 coordinates, expected trace markers, groups and secret registries are scorer-only.
@@ -20,6 +21,32 @@ five-second checks per call. Checks are cooperative; they do not preempt an
 arbitrarily blocked kernel/provider call. The actual controller must bound its
 processes and verify the implementation digest before execution. A changed
 method/config/candidate invalidates the corresponding frozen campaign admission.
+
+`controller.evaluate` defaults to explicit not-run rows and never constructs a
+transport unless the caller passes `execute=True`. Admission pins the candidate,
+canonical manifest, parsed scorer/public/source input bundle, installed domain
+and method source bytes, and all three method configurations. The caller supplies
+the observed candidate commit; this module does not invoke Git or attest running
+Python objects. A parsed-input digest does not replace verification of original
+corpus bytes against the manifest. The controller validates all case bindings and
+available public source views before dispatch, snapshots mutable inputs, and
+retains stale/unavailable cases in the fixed denominator. Canonical heldout seal,
+DEV lock, method configuration and caller-owned durable exposure history checks
+remain mandatory; heldout candidate identity is checked as well. Do not use an
+in-memory history double for a real heldout campaign.
+
+The transport factory receives public case/method/source IDs only. Construction
+failures and invalid replies retain attempted-call accounting even when no
+evidence can be recorded. Metrics retain the actual frame origin and unknown
+read counts. Results include private predictions/outcomes and per-case tool
+metrics; `public_aggregates()` emits only the frozen S1 aggregate allowlist.
+The manifest must declare that exact supported publication policy.
+
+`uv run python scripts/eval.py --preflight` prints installed method/configuration
+identity with `status: not_measured`. This entry point has no campaign loader,
+arbitrary plugin import or native source adapter. An authorized caller can invoke
+the controller with independently admitted in-memory inputs and a trusted
+transport. No actual campaign or source acquisition is established by preflight.
 
 Attempted and returned calls, observed serialized-frame bytes, elapsed time and
 frame origin are recorded. Read counts remain null when any response lacks
