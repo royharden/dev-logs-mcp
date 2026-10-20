@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ..shared.evalkit.corpus import FrozenCorpusError, load_corpus
@@ -23,7 +23,15 @@ from ..shared.evalkit.models import (
     Wire,
 )
 from ..shared.evalkit.runner import HeldoutAdmission, HeldoutHistory, SourceView
-from .controller import Admission, EvaluationResult, TransportFactory, digest, evaluate
+from .controller import (
+    Admission,
+    EvaluationResult,
+    TransportFactory,
+    digest,
+    evaluate,
+    implementation_digest,
+    method_config_hashes,
+)
 from .domain import EvidenceStore, IncidentAdapter
 
 
@@ -46,6 +54,29 @@ class CorpusAdmission:
     public_inputs_sha256: str
     corpus_rights: PinnedReference
     corpus_authority: PinnedReference
+
+
+class _RecordedExposure(HeldoutHistory):
+    """One canonical handoff for an exposure recorded before the private read.
+
+    This is not a history store: every invocation must first obtain successful
+    recording from the caller-owned history. Failure after that point still
+    consumes the exposure, including a failed corpus read or controller check.
+    """
+
+    def __init__(self, history: HeldoutHistory, admission: HeldoutAdmission):
+        self._pending: HeldoutAdmission | None = replace(
+            admission, method_config_sha256=dict(admission.method_config_sha256)
+        )
+        # The callback gets its own mutable mapping, not the canonical handoff.
+        history.record_exposure(
+            replace(admission, method_config_sha256=dict(admission.method_config_sha256))
+        )
+
+    def record_exposure(self, admission: HeldoutAdmission) -> None:
+        expected, self._pending = self._pending, None
+        if expected is None or expected != admission:
+            raise FrozenCorpusError("heldout_exposure_handoff_changed_or_used")
 
 
 def binding_digest(bindings: Mapping[str, SourceBinding]) -> str:
@@ -129,6 +160,17 @@ def evaluate_from_corpus(
     durable heldout history. Only selected-split source snapshots are accepted.
     Default execution remains not-run; this entry performs private input reads.
     """
+    admission = replace(
+        admission,
+        controller=replace(
+            admission.controller,
+            method_config_sha256=dict(admission.controller.method_config_sha256),
+        ),
+    )
+    if heldout_admission is not None:
+        heldout_admission = replace(
+            heldout_admission, method_config_sha256=dict(heldout_admission.method_config_sha256)
+        )
     if (
         admission.split not in ("dev", "heldout")
         or not _declared(admission.corpus_rights)
@@ -157,6 +199,14 @@ def evaluate_from_corpus(
             or heldout_admission.history_ref != manifest.run_history_ref
         ):
             raise FrozenCorpusError("heldout_frozen_admission_changed")
+        # Compare the installed owner implementation and actual runtime bounds,
+        # rather than merely comparing two potentially stale caller declarations.
+        implementation = implementation_digest()
+        if admission.controller.implementation_sha256 != implementation:
+            raise FrozenCorpusError("controller_admission_changed")
+        configs = method_config_hashes(implementation, max_calls=max_calls, max_seconds=max_seconds)
+        if dict(admission.controller.method_config_sha256) != configs:
+            raise FrozenCorpusError("controller_method_config_changed")
     # Snapshot nested mutable wire mappings before any file read/caller callback.
     manifest = Manifest.model_validate_json(canonical_bytes(manifest.model_dump(mode="json")))
     bindings = {
@@ -193,6 +243,12 @@ def evaluate_from_corpus(
             raise FrozenCorpusError("corpus_admission_source_changed")
         sources[source_id] = binding.source_ref
     adapter = IncidentAdapter(public_inputs, EvidenceStore(sources))
+    if admission.split == "heldout":
+        # Recording is the caller's authorization boundary. A rejecting,
+        # reused or unimplemented history must fail before load_corpus. The
+        # unchanged canonical compare consumes this one-use handoff instead
+        # of recording the same exposure twice in the durable owner history.
+        heldout_history = _RecordedExposure(heldout_history, heldout_admission)
     # Canonical loader owns original JSONL byte hash, bounds, wire parsing,
     # ordered IDs, group membership and domain validation. Never reseal input.
     records = load_corpus(corpus_root, manifest, admission.split, adapter)

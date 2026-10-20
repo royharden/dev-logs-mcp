@@ -32,8 +32,7 @@ from dev_logs_mcp.shared.evalkit.models import (
 from dev_logs_mcp.shared.evalkit.runner import HeldoutAdmission, HeldoutHistory
 
 
-@pytest.fixture
-def job(tmp_path, monkeypatch):
+def _job(tmp_path, monkeypatch, selected_split="dev"):
     """what_bug_this_catches: disjoint handwritten splits never read existing Gold."""
 
     def forbidden(*_args, **_kwargs):
@@ -117,10 +116,10 @@ def job(tmp_path, monkeypatch):
             rights=declared,
             authority=declared,
         )
-    selected_public = {publics["dev"].item_id: publics["dev"]}
+    selected_public = {publics[selected_split].item_id: publics[selected_split]}
     selected_sources, selected_bindings = (
-        {"dev_source": sources["dev"]},
-        {"dev_source": bindings["dev"]},
+        {f"{selected_split}_source": sources[selected_split]},
+        {f"{selected_split}_source": bindings[selected_split]},
     )
     adapter = IncidentAdapter(selected_public, EvidenceStore(selected_sources))
     manifest = Manifest.model_validate_json(
@@ -134,7 +133,12 @@ def job(tmp_path, monkeypatch):
                 "scorer_version": "handwritten_v1",
                 "comparator_config": declared.model_dump(),
                 "domain_adapter_ref": declared.model_dump(),
-                "experiment_refs": {},
+                "experiment_refs": {
+                    "heldout_seal": declared.model_dump(),
+                    "dev_config_lock": declared.model_dump(),
+                }
+                if selected_split == "heldout"
+                else {},
                 "splits": entries,
                 "group_split_map": {f"{split}_group": split for split in rows},
                 "group_members": {f"{split}_group": [rows[split].item_id] for split in rows},
@@ -149,13 +153,13 @@ def job(tmp_path, monkeypatch):
         "1" * 40,
         digest(manifest.model_dump(mode="json")),
         implementation,
-        input_bundle_digest((rows["dev"],), selected_public, selected_sources),
+        input_bundle_digest((rows[selected_split],), selected_public, selected_sources),
         method_config_hashes(implementation),
     )
     return {
         "admission": CorpusAdmission(
             controller,
-            "dev",
+            selected_split,
             binding_digest(selected_bindings),
             public_input_digest(selected_public),
             declared,
@@ -166,9 +170,45 @@ def job(tmp_path, monkeypatch):
         "manifest": manifest,
         "public_inputs": selected_public,
         "bindings": selected_bindings,
-        "source_bytes": {"dev_source": snapshots["dev"]},
+        "source_bytes": {f"{selected_split}_source": snapshots[selected_split]},
         "transport_factory": lambda *_: pytest.fail("unexpected dispatch"),
     }
+
+
+@pytest.fixture
+def job(tmp_path, monkeypatch):
+    return _job(tmp_path, monkeypatch)
+
+
+class HandwrittenHistory(HeldoutHistory):
+    """A one-use test double, never a durable campaign history implementation."""
+
+    def __init__(self):
+        self.calls, self.events = [], []
+
+    def record_exposure(self, admission):
+        self.events.append("record_attempt")
+        if self.calls:
+            raise FrozenCorpusError("handwritten_exposure_already_used")
+        self.calls.append(admission)
+        self.events.append("recorded")
+
+
+@pytest.fixture
+def heldout_job(tmp_path, monkeypatch):
+    values = _job(tmp_path, monkeypatch, "heldout")
+    controller = values["admission"].controller
+    values["heldout_admission"] = HeldoutAdmission(
+        controller.manifest_sha256,
+        "c" * 64,
+        "c" * 64,
+        dict(controller.method_config_sha256),
+        controller.candidate_commit,
+        "handwritten_history",
+        None,
+    )
+    values["heldout_history"] = HandwrittenHistory()
+    return values
 
 
 def repin_manifest(job, mutate):
@@ -317,3 +357,109 @@ def test_unavailable_artifact_cannot_claim_partition_isolation(job):
     )
     with pytest.raises(FrozenCorpusError, match="source_artifact_ambiguous"):
         evaluate_from_corpus(**job)
+
+
+def test_valid_heldout_records_before_load_with_one_canonical_handoff(heldout_job, monkeypatch):
+    """what_bug_this_catches: heldout loading must follow one successful owner record."""
+    from dev_logs_mcp.evaluation import admission as entry
+
+    history = heldout_job["heldout_history"]
+    loader, controller = entry.load_corpus, entry.evaluate
+    handoffs = []
+
+    def load(*args):
+        assert history.events == ["record_attempt", "recorded"]
+        history.events.append("load")
+        return loader(*args)
+
+    def evaluate(**kwargs):
+        history.events.append("controller")
+        handoffs.append(kwargs["heldout_history"])
+        return controller(**kwargs)
+
+    monkeypatch.setattr(entry, "load_corpus", load)
+    monkeypatch.setattr(entry, "evaluate", evaluate)
+    result = evaluate_from_corpus(**heldout_job)
+    assert result.comparison.frozen_item_ids == ("heldout_case",)
+    assert all(row.measurement_status == "not_measured" for row in result.metric_rows)
+    assert history.events == ["record_attempt", "recorded", "load", "controller"]
+    assert history.calls == [heldout_job["heldout_admission"]]
+    assert len(handoffs) == 1 and handoffs[0] is not history
+    with pytest.raises(FrozenCorpusError, match="handoff_changed_or_used"):
+        handoffs[0].record_exposure(heldout_job["heldout_admission"])
+    assert len(history.calls) == 1
+
+
+@pytest.mark.parametrize("kind", ["rejecting", "reused", "unimplemented"])
+def test_history_refusal_prevents_heldout_load_and_dispatch(heldout_job, monkeypatch, kind):
+    """what_bug_this_catches: even fully pinned rows stay unread on denied exposure."""
+
+    class RejectingHistory(HeldoutHistory):
+        def record_exposure(self, admission):
+            raise FrozenCorpusError("handwritten_permission_denied")
+
+    if kind == "rejecting":
+        heldout_job["heldout_history"] = RejectingHistory()
+    elif kind == "unimplemented":
+        heldout_job["heldout_history"] = HeldoutHistory()
+    else:
+        evaluate_from_corpus(**heldout_job)
+        assert len(heldout_job["heldout_history"].calls) == 1
+    monkeypatch.setattr(
+        "dev_logs_mcp.evaluation.admission.load_corpus", lambda *_: pytest.fail("corpus read")
+    )
+    with pytest.raises((FrozenCorpusError, NotImplementedError)):
+        evaluate_from_corpus(**heldout_job, execute=True)
+    if kind == "reused":
+        assert len(heldout_job["heldout_history"].calls) == 1
+
+
+@pytest.mark.parametrize(
+    "change", ["implementation_pin", "installed_implementation", "max_calls", "max_seconds"]
+)
+def test_actual_heldout_identity_checked_before_load_or_exposure(heldout_job, monkeypatch, change):
+    """what_bug_this_catches: matching stale declarations cannot authorize private reads."""
+    history = heldout_job["heldout_history"]
+    if change == "implementation_pin":
+        heldout_job["admission"] = replace(
+            heldout_job["admission"],
+            controller=replace(heldout_job["admission"].controller, implementation_sha256="0" * 64),
+        )
+    elif change == "installed_implementation":
+        monkeypatch.setattr(
+            "dev_logs_mcp.evaluation.admission.implementation_digest", lambda: "0" * 64
+        )
+    elif change == "max_calls":
+        heldout_job["max_calls"] = 63
+    else:
+        heldout_job["max_seconds"] = 29.0
+    # The two caller-supplied configuration declarations still agree.
+    assert (
+        heldout_job["admission"].controller.method_config_sha256
+        == heldout_job["heldout_admission"].method_config_sha256
+    )
+    monkeypatch.setattr(
+        "dev_logs_mcp.evaluation.admission.load_corpus", lambda *_: pytest.fail("corpus read")
+    )
+    with pytest.raises(FrozenCorpusError, match="controller_(admission|method_config)_changed"):
+        evaluate_from_corpus(**heldout_job, execute=True)
+    assert history.calls == [] and history.events == []
+
+
+def test_heldout_load_failure_keeps_recorded_exposure_consumed(heldout_job, monkeypatch):
+    """what_bug_this_catches: a failed private read must not grant an unrecorded retry."""
+    history = heldout_job["heldout_history"]
+
+    def broken_load(*_):
+        assert len(history.calls) == 1
+        raise FrozenCorpusError("handwritten_corpus_read_failed")
+
+    monkeypatch.setattr("dev_logs_mcp.evaluation.admission.load_corpus", broken_load)
+    with pytest.raises(FrozenCorpusError, match="corpus_read_failed"):
+        evaluate_from_corpus(**heldout_job, execute=True)
+    monkeypatch.setattr(
+        "dev_logs_mcp.evaluation.admission.load_corpus", lambda *_: pytest.fail("corpus reread")
+    )
+    with pytest.raises(FrozenCorpusError, match="exposure_already_used"):
+        evaluate_from_corpus(**heldout_job, execute=True)
+    assert len(history.calls) == 1

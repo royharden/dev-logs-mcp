@@ -86,8 +86,17 @@ snapshots already acquired by the caller, joins their hashes and exact case
 membership to manifest artifacts, and rejects missing/extra bindings. Both DEV
 and heldout must be nonempty with disjoint groups and source bytes. This validates
 declared partition isolation, not semantic independence of generated families.
-Default execution stays not-run. Heldout requires the existing admission/history
-ports, and canonical controller checks still apply. No durable history store,
+Default execution stays not-run. Before loading heldout rows, the entry verifies
+the installed implementation digest and the actual method configurations derived
+from the requested call/deadline bounds against the frozen controller/heldout
+pins. It then requires successful `record_exposure` on the caller-owned history.
+A rejecting, reused or unimplemented history prevents the private corpus read.
+The unchanged canonical controller receives a one-use, exact-admission handoff
+for that already recorded exposure; it retains its own pin checks without
+recording the exposure a second time. A failed load or later controller refusal
+still consumes the recorded exposure. The handoff is not a durable history store
+or permission source; actual authorization and repeat/rerun decisions remain
+with the caller-owned history. No durable history store,
 campaign, corpus generator, native source reader, CLI campaign loader or Windows
 access capability is added. Verified supplied snapshots do not attest that a
 transport consumed those same bytes; actual capture provenance and process
