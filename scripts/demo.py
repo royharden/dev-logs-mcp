@@ -147,7 +147,8 @@ async def exercise(root: Path, report: dict) -> dict:
     failures = report["required_failures"]
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr:
         async with stdio_client(params, errlog=stderr) as (reader, writer):
-            async with ClientSession(reader, writer, read_timeout_seconds=15) as client:
+            # Same cold-import window as the Windows stdio test: 15s flakes.
+            async with ClientSession(reader, writer, read_timeout_seconds=120) as client:
                 await client.initialize()
                 catalog = await client.list_tools()
                 require(

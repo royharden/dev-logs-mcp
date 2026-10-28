@@ -93,7 +93,9 @@ def test_actual_windows_cli_stdio_refuses_data_without_fallback(tmp_path):
             command=sys.executable, args=["-m", "dev_logs_mcp", "serve", str(config)]
         )
         async with stdio_client(params) as (reader, writer):
-            async with ClientSession(reader, writer, read_timeout_seconds=15) as client:
+            # Cold `import mcp.server.stdio` was 14s before stdin is read, and
+            # the whole test then took 44s to 57s. 15s flakes. 120s still fails a hang.
+            async with ClientSession(reader, writer, read_timeout_seconds=120) as client:
                 await client.initialize()
                 listed = await client.call_tool("list_sources", {})
                 assert listed.structured_content["sources"][0]["readable"] is False

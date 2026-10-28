@@ -163,7 +163,7 @@ def test_seeded_demo_uses_actual_cli_and_keeps_required_failures():
         [sys.executable, str(root / "scripts" / "demo.py"), "--mode", "mock"],
         capture_output=True,
         text=True,
-        timeout=90,
+        timeout=180,
         check=False,
     )
     report = json.loads(result.stdout)
