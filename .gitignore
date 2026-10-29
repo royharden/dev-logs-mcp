@@ -12,3 +12,14 @@ fixtures/generated/
 .agent-registry/
 .chatexports/
 *.egg-info/
+
+# Local credentials, archives and generated artifacts
+.creds/
+ArchiveManager-creds.txt
+*.pem
+*.key
+*.p12
+*.pfx
+*.zip
+node_modules/
+build/
